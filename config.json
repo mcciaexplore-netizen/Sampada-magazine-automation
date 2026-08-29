@@ -1,0 +1,50 @@
+{
+  "magazine_name": "Sampada",
+  "publisher": "MCCIA",
+  "default_language": "en-IN",
+  "audio_language": "en",
+  "speech_rate": "+10%",
+  "include_full_magazine": true,
+  "article_titles": {
+    "4": "Food Safety: A Shared Responsibility, A Business Imperative",
+    "5": "Food Safety Moves Closer to Everyday India",
+    "6": "India’s Food Moment",
+    "12": "The Science Behind Every Bite",
+    "16": "When Safety Becomes a Habit",
+    "21": "Safety Builds Trust",
+    "24": "When Machines Keep Watch",
+    "27": "The Resilience Behind Safe Food",
+    "30": "The Technologies Rewriting Food Safety",
+    "32": "Before It Reaches Your Spoon",
+    "36": "From Farm to Global Market: Making Sapta Dhara Work for India’s Farmers and MSMEs",
+    "39": "India’s Rising Protein Economy",
+    "42": "Food Safety Summit Puts Technology and Compliance in Focus",
+    "44": "MCCIA Conducts Five-Day Agri-Food EXIM Certification Course",
+    "45": "MCCIA Hosts Sri Lanka, Ethiopia Business Engagements in Pune",
+    "47": "MCCIA, Naval Armament Officials Discuss Defence Testing Centre in Pune",
+    "49": "MCCIA–PMRDA Meet Addresses Industry Issues",
+    "50": "Food Safety is Good Business",
+    "53": "यश ट्रेडिंग कंपनीकडून फळे, भाज्या, कांद्याची निर्यात; जान्हवी अग्रवाल यांचा विश्वसनीय ब्रँड",
+    "55": "New Fuel-Cell Catalyst Could Help Power Data Centers",
+    "56": "Off the Assembly Line",
+    "58": "Eat Smarter, Not Just Cleaner"
+  },
+  "selected_pages": [6, 12, 16, 21, 24, 27, 32, 36, 39, 42, 44, 45, 47, 49, 50, 53, 55],
+  "voices": {
+    "en": "en-IN-NeerjaNeural",
+    "mr": "mr-IN-AarohiNeural",
+    "hi": "hi-IN-SwaraNeural"
+  },
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "background": "#102A36",
+    "accent": "#E8A23B"
+  },
+  "performance": {
+    "audio_workers": 4,
+    "video_workers": 2,
+    "reuse_completed_files": true
+  }
+}
