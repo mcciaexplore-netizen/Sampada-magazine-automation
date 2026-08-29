@@ -127,7 +127,10 @@ def status_summary(work_dir: Path) -> dict[str, int]:
     selected = 0
     if manifest.exists():
         frame = pd.read_csv(manifest, encoding="utf-8-sig")
-        selected = int(frame["selected"].astype(str).str.lower().eq("yes").sum())
+        selected_mask = frame["selected"].astype(str).str.lower().eq("yes")
+        if "id" in frame.columns:
+            selected_mask &= frame["id"].astype(str).str.lower().ne("full")
+        selected = int(selected_mask.sum())
     return {
         "selected": selected,
         "audio": count("audio", "*.mp3"),

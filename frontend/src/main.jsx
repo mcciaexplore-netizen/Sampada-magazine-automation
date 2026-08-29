@@ -24,11 +24,21 @@ function App() {
   const [stats, setStats] = useState({ selected: 0, audio: 0, videos: 0, qr: 0 });
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState(null);
+  const [scriptsReady, setScriptsReady] = useState(false);
   const [folder, setFolder] = useState("");
 
   const selectedCount = useMemo(() => rows.filter(row => String(row.selected).toLowerCase() === "yes" || row.selected === true).length, [rows]);
-  const scriptsReady = Boolean(issueKey && notice?.scriptsReady);
   const allAudio = stats.selected > 0 && stats.audio >= stats.selected;
+
+  const withLiveStats = async (work) => {
+    const refresh = async () => {
+      try { const progress = await api(`/api/status/${issueKey}`); setStats(progress.stats); }
+      catch { /* The generation request remains the source of truth. */ }
+    };
+    const timer = window.setInterval(refresh, 1500);
+    try { return await work(); }
+    finally { window.clearInterval(timer); await refresh(); }
+  };
 
   const run = async (label, work) => {
     setBusy(label); setNotice(null);
@@ -42,23 +52,27 @@ function App() {
     const body = new FormData();
     body.append("file", file); body.append("year", year); body.append("month", month); body.append("drive_root", driveRoot);
     const data = await api("/api/analyze", { method: "POST", body });
-    setIssueKey(data.issue_key); setRows(data.rows); setStats(data.stats); setFolder(data.monthly_folder);
+    setIssueKey(data.issue_key); setRows(data.rows); setStats(data.stats); setScriptsReady(false); setFolder(data.monthly_folder);
     setNotice({ type: data.fallback ? "warning" : "success", text: data.fallback ? `Proof PDF: no embedded QR images. Review ${data.stats.selected} fallback selections.` : `Found ${data.stats.selected} QR-enabled articles.` });
   });
 
   const saveReview = () => run("Creating Excel and narration scripts…", async () => {
     const data = await api("/api/review", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey, rows }) });
-    setStats(data.stats); setNotice({ type: "success", text: data.message, scriptsReady: true });
+    setStats(data.stats); setScriptsReady(true); setNotice({ type: "success", text: data.message });
   });
 
-  const createAudio = () => run("Creating multilingual narration…", async () => {
-    const data = await api("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey }) });
-    setStats(data.stats); setNotice({ type: "success", text: data.message, scriptsReady: true });
+  const createAudio = () => run("Creating English narration…", async () => {
+    await withLiveStats(async () => {
+      const data = await api("/api/audio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey }) });
+      setStats(data.stats); setNotice({ type: "success", text: data.message });
+    });
   });
 
   const createVideos = () => run("Rendering 1080p videos…", async () => {
-    const data = await api("/api/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey }) });
-    setStats(data.stats); setNotice({ type: "success", text: data.message, scriptsReady: true });
+    await withLiveStats(async () => {
+      const data = await api("/api/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey }) });
+      setStats(data.stats); setNotice({ type: "success", text: data.message });
+    });
   });
 
   const loadLinks = () => run("Loading YouTube link rows…", async () => {
@@ -87,12 +101,12 @@ function App() {
       <button className="primary" disabled={!file || busy} onClick={analyze}><Play size={17}/> Analyze edition</button>
     </section>
 
-    {busy && <div className="busy"><LoaderCircle className="spin" size={19}/>{busy}</div>}
+    {busy && <div className="busy"><LoaderCircle className="spin" size={19}/>{busy}{busy.startsWith("Creating English") && ` ${stats.audio} / ${stats.selected}`}{busy.startsWith("Rendering") && ` ${stats.videos} / ${stats.selected}`}</div>}
     {notice && <div className={`notice ${notice.type}`}>{notice.text}</div>}
 
     {issueKey && <>
       <section className="metrics">
-        {[['Selected', selectedCount], ['Audio', stats.audio], ['Videos', stats.videos], ['QR codes', stats.qr]].map(([label, value]) => <div className="metric" key={label}><strong>{value}</strong><span>{label}</span></div>)}
+        {[['Selected', selectedCount, null], ['Audio', stats.audio, stats.selected], ['Videos', stats.videos, stats.selected], ['QR codes', stats.qr, stats.selected]].map(([label, value, total]) => <div className="metric" key={label}><strong>{value}{total !== null && <small> / {total}</small>}</strong><span>{label}</span></div>)}
       </section>
 
       <section className="card review">
@@ -113,4 +127,6 @@ function App() {
   </main>;
 }
 
-createRoot(document.getElementById("root")).render(<React.StrictMode><App/></React.StrictMode>);
+const container = document.getElementById("root");
+const root = container.__sampadaRoot || (container.__sampadaRoot = createRoot(container));
+root.render(<React.StrictMode><App/></React.StrictMode>);

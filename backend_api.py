@@ -81,6 +81,12 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/api/status/{issue_key}")
+def issue_status(issue_key: str) -> dict:
+    issue_dir, _manifest, _state, _drive_paths = issue_context(issue_key)
+    return {"stats": status_summary(issue_dir)}
+
+
 @app.post("/api/analyze")
 async def analyze(
     file: UploadFile = File(...),
@@ -133,6 +139,8 @@ def review(payload: ReviewPayload) -> dict:
     if frame.empty or not frame["selected"].astype(str).str.lower().isin(["yes", "true", "1"]).any():
         raise HTTPException(400, "Select at least one article")
     frame["selected"] = frame["selected"].map(lambda value: "yes" if str(value).lower() in {"yes", "true", "1"} else "no")
+    if "id" in frame.columns:
+        frame.loc[frame["id"].astype(str).str.lower().eq("full"), "selected"] = "no"
     frame["language"] = "en"
     missing_articles = [
         str(path)

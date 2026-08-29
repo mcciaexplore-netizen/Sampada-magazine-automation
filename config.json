@@ -4,7 +4,7 @@
   "default_language": "en-IN",
   "audio_language": "en",
   "speech_rate": "+10%",
-  "include_full_magazine": true,
+  "include_full_magazine": false,
   "article_titles": {
     "4": "Food Safety: A Shared Responsibility, A Business Imperative",
     "5": "Food Safety Moves Closer to Everyday India",
@@ -35,16 +35,23 @@
     "mr": "mr-IN-AarohiNeural",
     "hi": "hi-IN-SwaraNeural"
   },
+  "english_narration_overrides": {
+    "p053": "Yash Trading Company exports fruits, vegetables, and onions, led by Janhavi Agrawal and her trusted brand. Janhavi entered agricultural exports without a family business background or prior technical experience. She learned the rules, documentation, markets, and farmer requirements step by step, and started the business in 2020. Yash Trading Company now exports fruits and vegetables including pomegranates, bananas, sapota, onions, and green chillies. It also trades edible flowers, rice, and sugar. Indian onions are strongly demanded in Gulf markets, making them an important focus for the company. Janhavi built her place in a largely male-dominated sector by treating every difficulty as a problem to solve. Careful market research, dependable quality, and strong relationships with farmers and buyers helped establish the company as a reliable exporter. Guidance from organisations such as MCCIA, NABARD, and the Agriculture Export Facilitation Centre helps new exporters understand regulations, identify suitable products and countries, and build international networks. Janhavi's journey shows young entrepreneurs that agricultural exports offer meaningful opportunities when ambition is supported by knowledge, discipline, and trust."
+  },
   "video": {
-    "width": 1920,
-    "height": 1080,
-    "fps": 30,
+    "width": 1280,
+    "height": 720,
+    "fps": 1,
+    "template": "assets/sampada-video-template.png",
+    "title_overrides": {
+      "p053": "Yash Trading Company Exports Fruits, Vegetables and Onions — Janhavi Agrawal's Trusted Brand"
+    },
     "background": "#102A36",
     "accent": "#E8A23B"
   },
   "performance": {
     "audio_workers": 4,
-    "video_workers": 2,
+    "video_workers": 4,
     "reuse_completed_files": true
   }
 }

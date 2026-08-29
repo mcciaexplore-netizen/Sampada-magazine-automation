@@ -214,6 +214,8 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
 def iter_manifest(manifest: Path) -> Iterable[dict]:
     with manifest.open("r", encoding="utf-8-sig", newline="") as stream:
         for row in csv.DictReader(stream):
+            if row.get("id", "").strip().lower() == "full":
+                continue
             if row.get("selected", "yes").strip().lower() in {"yes", "y", "1", "true"}:
                 yield row
 
@@ -243,9 +245,10 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
         narration = "\n\n".join(paragraphs)
         if narration.lower().startswith(title.lower()):
             narration = narration[len(title):].lstrip(" :\n")
+        english_override = config.get("english_narration_overrides", {}).get(row["id"])
         intro = f"{title}.\n\n"
         outro = f"\n\nThis article is from {config['magazine_name']}, published by {config['publisher']}."
-        script = intro + narration + outro
+        script = (english_override.strip() if english_override else intro + narration) + outro
         keywords = keywords_for(body, title)
         excerpt = re.sub(r"\s+", " ", narration)[:650].rsplit(" ", 1)[0]
         description = f"{excerpt}\n\nRead in {config['magazine_name']} by {config['publisher']}.\n\n" + " ".join(f"#{slugify(k).replace('-', '')}" for k in keywords[:5])
@@ -273,8 +276,19 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
 
 async def synthesize_one(text: str, voice: str, output: Path, rate: str = "+0%") -> None:
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate=rate)
-    await communicate.save(str(output))
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            output.unlink(missing_ok=True)
+            communicate = edge_tts.Communicate(text, voice, rate=rate)
+            await communicate.save(str(output))
+            if output.exists() and output.stat().st_size > 1024:
+                return
+        except Exception as error:
+            last_error = error
+        if attempt < 2:
+            await asyncio.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"English voice generation failed after 3 attempts: {last_error}")
 
 
 def split_narration(text: str, limit: int = 4500) -> list[str]:
@@ -356,6 +370,50 @@ def find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 def title_card(title: str, subtitle: str, output: Path, config: dict) -> None:
     width, height = config["video"]["width"], config["video"]["height"]
+    template_value = config.get("video", {}).get("template", "")
+    template_path = ROOT / template_value if template_value else None
+    if template_path and template_path.exists():
+        image = Image.open(template_path).convert("RGB").resize((width, height), Image.Resampling.LANCZOS)
+        draw = ImageDraw.Draw(image)
+        scale = width / 1280
+        top, bottom, split = int(286 * scale), int(447 * scale), int(430 * scale)
+        draw.rectangle((0, top, split, bottom), fill="#0E5F9F")
+        draw.rectangle((split, top, width, bottom), fill="#F5F3EF")
+        grid = "#DDDED9"
+        for x in (549, 695, 842, 988, 1135):
+            draw.line((int(x * scale), top, int(x * scale), bottom), fill=grid, width=max(1, int(2 * scale)))
+        draw.line((split, int(293 * scale), width, int(293 * scale)), fill=grid, width=max(1, int(2 * scale)))
+        draw.line((split, int(440 * scale), width, int(440 * scale)), fill=grid, width=max(1, int(2 * scale)))
+
+        font = find_font(max(24, int(39 * scale)))
+        words = title.split()
+        lines: list[str] = []
+        current = ""
+        max_text_width = int(width * 0.88)
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and draw.textbbox((0, 0), candidate, font=font)[2] > max_text_width:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+        lines = lines[:3]
+        line_height = max(42, int(55 * scale))
+        y = int((top + bottom - line_height * len(lines)) / 2)
+        for line in lines:
+            box = draw.textbbox((0, 0), line, font=font)
+            text_width = box[2] - box[0]
+            x = (width - text_width) // 2
+            pad_x, pad_y = int(16 * scale), int(7 * scale)
+            draw.rectangle((x - pad_x, y - pad_y, x + text_width + pad_x, y + line_height - pad_y), fill="#159447")
+            draw.text((x, y), line, font=font, fill="white")
+            y += line_height
+        output.parent.mkdir(exist_ok=True)
+        image.save(output, quality=95)
+        return
+
     image = Image.new("RGB", (width, height), config["video"]["background"])
     draw = ImageDraw.Draw(image)
     accent = config["video"]["accent"]
@@ -391,8 +449,15 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
         return video
     if not audio.exists():
         raise FileNotFoundError(f"Run narrate first: {audio}")
-    title_card(row["title"], f"{config['magazine_name']} | {config['publisher']}", card, config)
-    cmd = [ffmpeg, "-y", "-loop", "1", "-i", str(card), "-i", str(audio), "-c:v", "libx264", "-preset", "veryfast", "-tune", "stillimage", "-c:a", "aac", "-b:a", "192k", "-pix_fmt", "yuv420p", "-shortest", "-movflags", "+faststart", str(video)]
+    display_title = config.get("video", {}).get("title_overrides", {}).get(row["id"], row["title"])
+    title_card(display_title, f"{config['magazine_name']} | {config['publisher']}", card, config)
+    fps = str(max(1, int(config.get("video", {}).get("fps", 1))))
+    cmd = [
+        ffmpeg, "-y", "-framerate", fps, "-loop", "1", "-i", str(card), "-i", str(audio),
+        "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-r", fps,
+        "-c:a", "aac", "-b:a", "128k", "-pix_fmt", "yuv420p", "-shortest",
+        "-movflags", "+faststart", str(video),
+    ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return video
 
