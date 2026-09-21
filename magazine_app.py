@@ -8,8 +8,6 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-import cv2
-import numpy as np
 import pandas as pd
 import pdfplumber
 
@@ -55,6 +53,11 @@ def monthly_paths(base: Path, year: int, month: int) -> dict[str, Path]:
 
 
 def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 180) -> list[int]:
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return []
     detector = cv2.QRCodeDetector()
     found: list[int] = []
     with pdfplumber.open(pdf_path) as pdf:
