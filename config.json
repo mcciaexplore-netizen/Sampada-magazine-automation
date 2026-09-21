@@ -1,0 +1,60 @@
+{
+  "magazine_name": "Sampada",
+  "publisher": "MCCIA",
+  "default_language": "en-IN",
+  "audio_language": "en",
+  "speech_rate": "+10%",
+  "include_full_magazine": false,
+  "article_titles": {
+    "5": "A New Chapter, Built on 92 Years of Purpose",
+    "8": "Deepening India’s Chemical Manufacturing Base",
+    "15": "The Chemistry Behind Make in India",
+    "18": "Maharashtra’s Chemical Opportunity",
+    "24": "Beyond the Pharmacy of the World",
+    "28": "India’s China + 1 Moment",
+    "31": "More Than a Molecule",
+    "35": "India’s Chemical Opportunity Gets Bigger",
+    "40": "Engineering Safer Industrial Pumps",
+    "47": "एमएसएमई क्षेत्रात सुधारण्यासाठी सरकारचे महत्त्वाचे पाऊल",
+    "53": "प्रक्रिया केलेल्या खाद्यपदार्थांच्या निर्यातीतील विश्वासार्ह नाव – कांचन कुलकर्णी; आंतरराष्ट्रीय बाजारपेठेत ठसा उमटविणारा निर्यातदार",
+    "55": "New Alloy Delivers 50% More Strength, 400% Higher Ductility"
+  },
+  "selected_pages": [5, 8, 15, 18, 24, 28, 31, 35, 40, 47, 53, 55],
+  "voices": {
+    "en": "en-IN-NeerjaNeural",
+    "mr": "mr-IN-AarohiNeural",
+    "hi": "hi-IN-SwaraNeural"
+  },
+  "english_narration_overrides": {},
+  "video": {
+    "width": 1280,
+    "height": 720,
+    "fps": 1,
+    "template": "assets/sampada-video-template.png",
+    "title_overrides": {
+      "p047": "एमएसएमई क्षेत्रात सुधारण्यासाठी सरकारचे महत्त्वाचे पाऊल",
+      "p053": "प्रक्रिया केलेल्या खाद्यपदार्थांच्या निर्यातीतील विश्वासार्ह नाव – कांचन कुलकर्णी; आंतरराष्ट्रीय बाजारपेठेत ठसा उमटविणारा निर्यातदार"
+    },
+    "article_categories": {
+      "p005": "AGM & Leadership",
+      "p008": "Cover Story",
+      "p015": "Indigenous Innovation",
+      "p018": "State Outlook",
+      "p024": "Pharma Transformation",
+      "p028": "China + 1 Strategy",
+      "p031": "Innovation Strategy",
+      "p035": "Circular Economy",
+      "p040": "Industrial Safety",
+      "p047": "धोरण मीमांसा",
+      "p053": "निर्यातगाथा",
+      "p055": "Emerging Materials"
+    },
+    "background": "#102A36",
+    "accent": "#E8A23B"
+  },
+  "performance": {
+    "audio_workers": 4,
+    "video_workers": 4,
+    "reuse_completed_files": false
+  }
+}
