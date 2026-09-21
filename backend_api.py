@@ -34,11 +34,34 @@ from main import (
 app = FastAPI(title="Sampada media studio API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "Sampada Magazine Automation API",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/api/health",
+        "endpoints": [
+            "/api/health",
+            "/api/analyze",
+            "/api/save-review",
+            "/api/generate-scripts",
+            "/api/generate-audio",
+            "/api/generate-videos",
+            "/api/generate-qr",
+            "/api/export-excel",
+            "/api/upload-drive",
+            "/api/automate"
+        ]
+    }
 
 
 class ReviewPayload(BaseModel):
