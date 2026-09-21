@@ -20,6 +20,12 @@ from typing import Iterable
 import pdfplumber
 from PIL import Image, ImageDraw, ImageFont
 
+# Expose backend FastAPI app for deployment servers looking at main.py
+try:
+    from backend_api import app  # noqa: F401
+except ImportError:
+    app = None
+
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG = ROOT / "config.json"

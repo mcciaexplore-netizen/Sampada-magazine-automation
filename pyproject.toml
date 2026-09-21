@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sampada-magazine-automation"
+version = "0.1.0"
+description = "Sampada magazine-to-YouTube production automation system"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pdfplumber>=0.11",
+    "Pillow>=10",
+    "qrcode[pil]>=8",
+    "edge-tts>=7",
+    "imageio-ffmpeg>=0.6",
+    "streamlit>=1.62",
+    "opencv-python-headless>=4.8",
+    "pandas>=2.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.20",
+    "python-multipart>=0.0.9",
+    "openpyxl>=3.1"
+]
+
+[tool.vercel]
+entrypoint = "backend_api:app"
