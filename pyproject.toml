@@ -25,3 +25,6 @@ dependencies = [
 
 [tool.vercel]
 entrypoint = "backend_api:app"
+
+[tool.setuptools]
+py-modules = ["backend_api", "main", "generate_captions", "generate_summary_video", "video_overlay"]
