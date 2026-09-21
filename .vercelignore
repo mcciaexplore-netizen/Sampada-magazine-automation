@@ -1,7 +1,7 @@
 # Vercel Deployment Ignore list
 work/
 assets/
-frontend/
+frontend/node_modules/
 .venv/
 __pycache__/
 *.mp4
