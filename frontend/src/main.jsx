@@ -118,9 +118,15 @@ function App() {
 
   return <main className="shell">
     <header>
-      <span className="eyebrow">MCCIA · monthly production workspace</span>
-      <h1>Sampada media studio</h1>
-      <p>Convert selectable-text magazine articles into reviewable metadata, multilingual narration, 1080p videos, SRT captions, and print-ready QR codes.</p>
+      <div className="header-left">
+        <img src="/mccia-logo.svg" alt="MCCIA Logo" className="brand-logo" />
+        <div className="brand-divider"></div>
+        <div>
+          <span className="eyebrow">MCCIA · monthly production workspace</span>
+          <h1>Sampada Media Studio</h1>
+          <p>Convert selectable-text magazine articles into reviewable metadata, multilingual narration, 1080p videos, SRT captions, and print-ready QR codes.</p>
+        </div>
+      </div>
     </header>
 
     <section className="setup card">
@@ -188,7 +194,7 @@ function App() {
           </table>
         </div>
         <div className="actions">
-          <button className="primary highlight-btn" disabled={!selectedCount || busy} onClick={runFullAutomation} style={{ background: "#0d7038", borderColor: "#0d7038", color: "#fff", fontWeight: "700" }}>
+          <button className="success" disabled={!selectedCount || busy} onClick={runFullAutomation}>
             <Sparkles size={16}/> 1-Click Full Automation & Google Drive Upload
           </button>
           <button disabled={!selectedCount || busy} onClick={saveReview}><Sheet size={16}/> Create Excel & scripts</button>

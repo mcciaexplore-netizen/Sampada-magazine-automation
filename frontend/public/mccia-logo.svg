@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 160" width="100%" height="100%">
+  <defs>
+    <style>
+      .mccia-blue { fill: #0066b2; }
+      .mccia-green { fill: #109848; }
+      .reg-mark { fill: #1e293b; font-family: 'DM Sans', Arial, sans-serif; font-size: 22px; font-weight: 600; }
+    </style>
+  </defs>
+
+  <!-- MCCIA LOGO SHAPES -->
+  <g transform="translate(10, 20)">
+    <!-- First 'm' (Blue) -->
+    <!-- Column 1 -->
+    <path class="mccia-blue" d="M 10 35 L 35 15 L 45 15 L 45 105 L 15 105 L 15 50 L 10 55 Z"/>
+    <!-- Arch 1 & Column 2 -->
+    <path class="mccia-blue" d="M 45 35 L 70 15 L 80 15 L 80 105 L 52 105 L 52 48 L 45 54 Z"/>
+    <!-- Arch 2 & Column 3 -->
+    <path class="mccia-blue" d="M 80 35 L 105 15 L 115 15 L 115 105 L 87 105 L 87 48 L 80 54 Z"/>
+
+    <!-- First 'c' (Blue) -->
+    <path class="mccia-blue" d="M 125 35 L 150 15 L 195 15 L 180 43 L 156 43 L 156 77 L 180 77 L 165 105 L 125 105 Z"/>
+
+    <!-- Second 'c' (Blue) -->
+    <path class="mccia-blue" d="M 205 35 L 230 15 L 275 15 L 260 43 L 236 43 L 236 77 L 260 77 L 245 105 L 205 105 Z"/>
+
+    <!-- 'i' (Blue) -->
+    <path class="mccia-blue" d="M 285 15 L 315 15 L 315 105 L 285 105 Z"/>
+
+    <!-- 'a' (Green) -->
+    <path class="mccia-green" d="M 325 35 C 325 22 336 15 352 15 L 395 15 L 395 105 L 365 105 L 365 92 C 358 102 344 107 332 103 C 322 100 320 88 322 78 L 365 74 L 365 52 L 350 52 C 342 52 338 56 338 64 L 325 64 Z"/>
+    <!-- Inner cut for 'a' -->
+    <path class="mccia-green" d="M 395 90 L 415 90 L 405 105 L 395 105 Z"/>
+
+    <!-- Registered Trademark (R) -->
+    <text x="408" y="24" class="reg-mark">®</text>
+  </g>
+</svg>
