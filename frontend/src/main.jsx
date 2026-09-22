@@ -5,10 +5,11 @@ import "./styles.css";
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 
 async function api(path, options = {}) {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = path.startsWith("http") ? path : `${API_BASE}${cleanPath}`;
   const response = await fetch(url, options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || data.message || "Request failed");
