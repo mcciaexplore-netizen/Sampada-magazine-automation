@@ -13,6 +13,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
+from PIL import Image, ImageTk
 import pandas as pd
 
 from magazine_app import (

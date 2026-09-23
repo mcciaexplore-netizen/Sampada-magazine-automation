@@ -1,6 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7" fill="#ffffff"/>
-  <rect width="32" height="32" rx="7" fill="none" stroke="#0066b2" stroke-width="1.5"/>
-  <text x="3" y="21" font-family="'Arial Black', sans-serif" font-weight="900" font-size="12" fill="#0066b2">mcc</text>
-  <text x="21" y="21" font-family="'Arial Black', sans-serif" font-weight="900" font-size="12" fill="#109848">a</text>
+  <rect width="32" height="32" rx="7" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+  <g transform="translate(1.5, 7) scale(0.065)">
+    <!-- m -->
+    <path fill="#0060aa" d="M 0 54 L 20 44 L 20 100 L 0 100 Z"/>
+    <path fill="#0060aa" d="M 27 54 L 47 44 L 47 100 L 27 100 Z"/>
+    <path fill="#0060aa" d="M 54 54 L 74 44 L 74 100 L 54 100 Z"/>
+    <!-- c1 -->
+    <path fill="#0060aa" d="M 87 50 L 105 44 L 140 44 L 131 60 L 107 60 L 107 84 L 131 84 L 122 100 L 87 100 Z"/>
+    <!-- c2 -->
+    <path fill="#0060aa" d="M 148 50 L 166 44 L 201 44 L 192 60 L 168 60 L 168 84 L 192 84 L 183 100 L 148 100 Z"/>
+    <!-- i -->
+    <path fill="#0060aa" d="M 210 44 L 230 44 L 230 100 L 210 100 Z"/>
+    <!-- a -->
+    <path fill="#12a84a" d="M 242 44 L 305 44 L 305 100 L 285 100 L 285 90 C 280 97 272 101 262 101 C 248 101 242 91 242 80 L 242 44 Z M 262 61 C 257 61 257 65 257 70 C 257 75 257 79 262 79 C 267 79 270 75 270 70 C 270 65 267 61 262 61 Z"/>
+    <path fill="#12a84a" d="M 305 84 L 322 100 L 305 100 Z"/>
+  </g>
 </svg>
