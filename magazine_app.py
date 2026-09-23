@@ -52,21 +52,32 @@ def monthly_paths(base: Path, year: int, month: int) -> dict[str, Path]:
     return paths
 
 
-def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 180) -> list[int]:
+def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 96) -> list[int]:
     try:
         import cv2
         import numpy as np
+        import gc
     except ImportError:
         return []
     detector = cv2.QRCodeDetector()
     found: list[int] = []
-    with pdfplumber.open(pdf_path) as pdf:
-        for index, page in enumerate(pdf.pages):
-            rgb = np.array(page.to_image(resolution=resolution, antialias=False).original.convert("RGB"))
-            gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-            ok, _points = detector.detectMulti(gray)
-            if ok:
-                found.append(index + 1)
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            for index, page in enumerate(pdf.pages):
+                try:
+                    img_obj = page.to_image(resolution=resolution, antialias=False)
+                    rgb = np.array(img_obj.original.convert("RGB"))
+                    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+                    ok, _points = detector.detectMulti(gray)
+                    if ok:
+                        found.append(index + 1)
+                    del rgb, gray, img_obj
+                except Exception:
+                    continue
+        import gc
+        gc.collect()
+    except Exception:
+        pass
     return found
 
 

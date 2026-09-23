@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { CheckSquare, FileText, FolderOpen, Headphones, LoaderCircle, Play, QrCode, Sheet, Sparkles, Square, Upload, Video } from "lucide-react";
 import "./styles.css";
+import mcciaLogo from "./assets/mccia-logo.png";
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -126,7 +127,7 @@ function App() {
   return <main className="shell">
     <header>
       <div className="header-left">
-        <img src="/mccia-logo.png" alt="MCCIA Logo" className="brand-logo" />
+        <img src={mcciaLogo} alt="MCCIA Logo" className="brand-logo" />
         <div className="brand-divider"></div>
         <div>
           <span className="eyebrow">MCCIA · monthly production workspace</span>

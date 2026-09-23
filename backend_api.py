@@ -140,7 +140,7 @@ async def analyze(
 
     config = load_config(CONFIG_PATH)
     manifest = extract_articles(pdf_path, issue_dir, config)
-    qr_pages = detect_qr_pdf_pages(pdf_path, resolution=150)
+    qr_pages = detect_qr_pdf_pages(pdf_path, resolution=96)
     frame = select_articles_containing_qr(manifest, qr_pages, use_existing_fallback=True)
     drive_paths = monthly_paths(Path(drive_root), year, month)
     import json

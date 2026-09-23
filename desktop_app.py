@@ -54,6 +54,13 @@ class SampadaDesktopApp(tk.Tk):
         self.configure(bg=self.BG)
         self.option_add("*Font", ("Segoe UI", 10))
         self.protocol("WM_DELETE_WINDOW", self.on_close)
+        try:
+            logo_img_path = ROOT / "assets" / "mccia-logo.png"
+            if logo_img_path.exists():
+                self._app_icon = ImageTk.PhotoImage(Image.open(logo_img_path))
+                self.iconphoto(False, self._app_icon)
+        except Exception:
+            pass
 
         self.events: queue.Queue[tuple[str, object]] = queue.Queue()
         self.busy = False

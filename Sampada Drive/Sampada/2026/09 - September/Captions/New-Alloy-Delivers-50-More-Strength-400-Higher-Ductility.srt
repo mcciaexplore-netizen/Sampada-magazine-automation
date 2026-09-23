@@ -1,0 +1,91 @@
+1
+00:00:00,100 --> 00:00:05,906
+New Alloy Delivers 50% More Strength, 400% Higher Ductility.
+
+2
+00:00:05,856 --> 00:00:20,674
+Breakthrough New Fuel-Cell Catalyst Could Help Power Data Centers Researchers at Washington University in St. Louis have designed a new carbon nanostructure that lets hydrogen fuel cells use far less platinum without losing performance or durability.
+
+3
+00:00:20,675 --> 00:00:31,561
+The advance, aimed at cutting the cost of clean, on-site power, comes as data centers driving the AI boom place unprecedented strain on electricity grids worldwide.
+
+4
+00:00:31,561 --> 00:00:37,209
+The rapid expansion of data centers is placing growing pressure on electricity grids.
+
+5
+00:00:37,209 --> 00:00:59,561
+Researchers led by Gang Wu at Washington University in St. Louis have now developed a carbon nanostructure that could help make hydrogen fuel cells more practical by addressing a key challenge — achieving high catalyst performance and durability while using platinum more Gang Wu and collaborators developed hollow nanocarbon spheres with ordered radial effectively.
+
+6
+00:00:59,561 --> 00:01:06,777
+The findings were published in nanochannels to support high-performance intermetallic nanoparticle fuel-cell catalysts.
+
+7
+00:01:06,777 --> 00:01:10,890
+Nature Nanotechnology in August 2026.
+
+8
+00:01:10,890 --> 00:01:21,209
+Hydrogen fuel cells generate electricity by combining hydrogen and oxygen, The carbon structure allows Moving Beyond the Lab producing water and heat in the process.
+
+9
+00:01:21,209 --> 00:01:34,129
+platinum-cobalt catalysts to The breakthrough does not mean fuel They could potentially provide on-site cells are immediately ready to power large withstand high-temperature power for data centers and other demanding data centers.
+
+10
+00:01:34,129 --> 00:01:47,595
+Instead, it addresses an important applications, but their reliance on costly processing without their technical barrier that has constrained their platinum catalysts remains an obstacle to nanoparticles clumping wider adoption.
+
+11
+00:01:47,595 --> 00:01:49,481
+wider adoption.
+
+12
+00:01:49,481 --> 00:01:59,049
+Wu has filed a patent on the technology together — improving both through Washington University and the Solving the Heat Problem activity and durability.
+
+13
+00:01:59,049 --> 00:02:05,277
+research team plans further development with The researchers developed hollow industry partners.
+
+14
+00:02:05,277 --> 00:02:18,981
+If successfully scaled, the carbon spheres containing tiny radial approach could eventually support fuel-cell channels that hold platinum-cobalt applications ranging from data-center power Built for Durability nanoparticles in place.
+
+15
+00:02:18,981 --> 00:02:21,674
+This allows the to transportation.
+
+16
+00:02:21,674 --> 00:02:42,890
+In accelerated testing, the catalyst catalyst to be heated to around 1,000°C l underwent 150,000 voltage cycles and without the particles clumping together — a retained about 85% of its performance, problem that has traditionally limited highequivalent to roughly 25,000 hours of temperature catalyst production.
+
+17
+00:02:42,890 --> 00:02:49,004
+operation, according to Washington The nanoparticles remained smaller University researchers.
+
+18
+00:02:49,004 --> 00:02:52,209
+than five nanometres and well dispersed.
+
+19
+00:02:52,209 --> 00:03:09,868
+The design also improves the movement The higher temperature enabled platinum Scan the QR code to of protons, oxygen and water through the and cobalt atoms to form a more ordered listen to the gist of the electrode, contributing to stronger fuel-cell structure, improving catalyst activity and article.
+
+20
+00:03:09,868 --> 00:03:11,447
+performance.
+
+21
+00:03:11,447 --> 00:03:13,038
+stability.
+
+22
+00:03:13,038 --> 00:03:18,152
+august 2026 | SAMPADA | 55
+
+23
+00:03:18,152 --> 00:03:22,640
+This article is from Sampada, published by MCCIA.
