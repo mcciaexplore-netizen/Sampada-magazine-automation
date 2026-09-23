@@ -1,37 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 160" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 130" width="100%" height="100%" fill="none">
+  <!-- MCCIA Official Vector Logo -->
   <defs>
     <style>
-      .mccia-blue { fill: #0066b2; }
-      .mccia-green { fill: #109848; }
-      .reg-mark { fill: #1e293b; font-family: 'DM Sans', Arial, sans-serif; font-size: 22px; font-weight: 600; }
+      .m-blue { fill: #0060aa; }
+      .m-green { fill: #12a84a; }
+      .reg-mark { fill: #0060aa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 20px; font-weight: 700; }
     </style>
   </defs>
 
-  <!-- MCCIA LOGO SHAPES -->
-  <g transform="translate(10, 20)">
-    <!-- First 'm' (Blue) -->
+  <g transform="translate(15, 12)">
+    <!-- Letter 'm' (3 distinct columns with top slant) -->
     <!-- Column 1 -->
-    <path class="mccia-blue" d="M 10 35 L 35 15 L 45 15 L 45 105 L 15 105 L 15 50 L 10 55 Z"/>
-    <!-- Arch 1 & Column 2 -->
-    <path class="mccia-blue" d="M 45 35 L 70 15 L 80 15 L 80 105 L 52 105 L 52 48 L 45 54 Z"/>
-    <!-- Arch 2 & Column 3 -->
-    <path class="mccia-blue" d="M 80 35 L 105 15 L 115 15 L 115 105 L 87 105 L 87 48 L 80 54 Z"/>
+    <path class="m-blue" d="M 0 54 L 20 44 L 20 100 L 0 100 Z"/>
+    <!-- Column 2 -->
+    <path class="m-blue" d="M 27 54 L 47 44 L 47 100 L 27 100 Z"/>
+    <!-- Column 3 -->
+    <path class="m-blue" d="M 54 54 L 74 44 L 74 100 L 54 100 Z"/>
 
-    <!-- First 'c' (Blue) -->
-    <path class="mccia-blue" d="M 125 35 L 150 15 L 195 15 L 180 43 L 156 43 L 156 77 L 180 77 L 165 105 L 125 105 Z"/>
+    <!-- Letter 'c' 1 -->
+    <path class="m-blue" d="M 87 50 L 105 44 L 140 44 L 131 60 L 107 60 L 107 84 L 131 84 L 122 100 L 87 100 Z"/>
 
-    <!-- Second 'c' (Blue) -->
-    <path class="mccia-blue" d="M 205 35 L 230 15 L 275 15 L 260 43 L 236 43 L 236 77 L 260 77 L 245 105 L 205 105 Z"/>
+    <!-- Letter 'c' 2 -->
+    <path class="m-blue" d="M 148 50 L 166 44 L 201 44 L 192 60 L 168 60 L 168 84 L 192 84 L 183 100 L 148 100 Z"/>
 
-    <!-- 'i' (Blue) -->
-    <path class="mccia-blue" d="M 285 15 L 315 15 L 315 105 L 285 105 Z"/>
+    <!-- Letter 'i' -->
+    <path class="m-blue" d="M 210 44 L 230 44 L 230 100 L 210 100 Z"/>
 
-    <!-- 'a' (Green) -->
-    <path class="mccia-green" d="M 325 35 C 325 22 336 15 352 15 L 395 15 L 395 105 L 365 105 L 365 92 C 358 102 344 107 332 103 C 322 100 320 88 322 78 L 365 74 L 365 52 L 350 52 C 342 52 338 56 338 64 L 325 64 Z"/>
-    <!-- Inner cut for 'a' -->
-    <path class="mccia-green" d="M 395 90 L 415 90 L 405 105 L 395 105 Z"/>
+    <!-- Letter 'a' (Green) -->
+    <path class="m-green" d="M 242 44 L 305 44 L 305 100 L 285 100 L 285 90 C 280 97 272 101 262 101 C 248 101 242 91 242 80 L 242 44 Z
+                             M 262 61 C 257 61 257 65 257 70 C 257 75 257 79 262 79 C 267 79 270 75 270 70 C 270 65 267 61 262 61 Z"/>
+    <!-- 'a' outer right tail accent -->
+    <path class="m-green" d="M 305 84 L 322 100 L 305 100 Z"/>
 
-    <!-- Registered Trademark (R) -->
-    <text x="408" y="24" class="reg-mark">®</text>
+    <!-- Trademark symbol ® -->
+    <text x="312" y="38" class="reg-mark">®</text>
   </g>
 </svg>
