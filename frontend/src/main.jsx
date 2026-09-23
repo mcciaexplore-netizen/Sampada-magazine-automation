@@ -10,10 +10,17 @@ const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 async function api(path, options = {}) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const url = path.startsWith("http") ? path : `${API_BASE}${cleanPath}`;
-  const response = await fetch(url, options);
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.detail || data.message || "Request failed");
-  return data;
+  try {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || data.message || `Request failed (${response.status})`);
+    return data;
+  } catch (err) {
+    if (err.message === "Failed to fetch" || err.name === "TypeError") {
+      throw new Error("Backend server is waking up or unreachable. Please wait 30-45 seconds for Render to spin up and retry.");
+    }
+    throw err;
+  }
 }
 
 function App() {
@@ -119,7 +126,7 @@ function App() {
   return <main className="shell">
     <header>
       <div className="header-left">
-        <img src="/mccia-logo.svg" alt="MCCIA Logo" className="brand-logo" />
+        <img src="/mccia-logo.png" alt="MCCIA Logo" className="brand-logo" />
         <div className="brand-divider"></div>
         <div>
           <span className="eyebrow">MCCIA · monthly production workspace</span>
