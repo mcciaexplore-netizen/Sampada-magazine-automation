@@ -19,7 +19,7 @@ async function api(path, options = {}) {
 function App() {
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(9);
-  const [driveRoot, setDriveRoot] = useState("C:\\Users\\Aarushi Gupta\\Downloads\\Sampada-magazine-automation-main\\work\\Sampada Drive");
+  const [driveRoot, setDriveRoot] = useState("Sampada Drive");
   const [file, setFile] = useState(null);
   const [issueKey, setIssueKey] = useState("");
   const [rows, setRows] = useState([]);

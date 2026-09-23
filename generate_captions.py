@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import csv
 import datetime
@@ -15,13 +16,15 @@ import edge_tts
 from edge_tts.submaker import Subtitle
 
 ROOT = Path(__file__).resolve().parent
-work_dir = ROOT / "work"
-manifest_path = work_dir / "manifest.csv"
-captions_dir = work_dir / "captions"
-captions_dir.mkdir(parents=True, exist_ok=True)
+DEFAULT_WORK_DIR = ROOT / "work"
 
-with open(ROOT / "config.json", "r", encoding="utf-8") as f:
-    config = json.load(f)
+
+def load_config(config_path: Path | None = None) -> dict:
+    path = config_path or (ROOT / "config.json")
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
 
 def media_slug(title: str, fallback: str = "Article") -> str:
@@ -96,7 +99,7 @@ def cues_to_srt(all_cues: list[Subtitle]) -> str:
     return "\n".join(lines)
 
 
-def process_article(row: dict) -> None:
+def process_article(row: dict, work_dir: Path, captions_dir: Path, config: dict) -> None:
     mslug = media_slug(row["title"])
     script_path = work_dir / "scripts" / f"{mslug}.txt"
     if not script_path.exists():
@@ -132,15 +135,29 @@ def process_article(row: dict) -> None:
     print(f"Generated SRT for {row['id']}: {srt_output.name} ({len(all_cues)} cues)")
 
 
-def main():
+def main(work_dir: Path | str | None = None, config: dict | None = None):
+    target_work_dir = Path(work_dir).resolve() if work_dir else DEFAULT_WORK_DIR
+    target_config = config if config is not None else load_config()
+    manifest_path = target_work_dir / "manifest.csv"
+    captions_dir = target_work_dir / "captions"
+    captions_dir.mkdir(parents=True, exist_ok=True)
+
+    if not manifest_path.exists():
+        print(f"Manifest not found: {manifest_path}")
+        return
+
     with open(manifest_path, "r", encoding="utf-8-sig") as f:
         rows = [r for r in csv.DictReader(f) if r.get("selected", "").lower() in ("yes", "y", "true", "1") and r.get("id") != "full"]
 
-    print(f"Generating captions for {len(rows)} articles...")
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        list(ex.map(process_article, rows))
-    print("All captions generated successfully in work/captions/")
+    print(f"Generating captions for {len(rows)} articles in {target_work_dir}...")
+    workers = min(4, len(rows)) if rows else 1
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(lambda r: process_article(r, target_work_dir, captions_dir, target_config), rows))
+    print(f"All captions generated successfully in {captions_dir}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Generate SRT captions for narrated Sampada articles")
+    parser.add_argument("--work-dir", type=Path, default=DEFAULT_WORK_DIR, help="Working issue directory")
+    args = parser.parse_args()
+    main(args.work_dir)

@@ -165,9 +165,24 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
     for r_idx, r in enumerate(meta_rows, start=4):
         m = manifest_map.get(r["id"], {})
         printed = f"{m.get('printed_start_page', '')} - {m.get('printed_end_page', '')}"
-        cap_file = r.get("caption_file", f"captions/{Path(r['script_file']).stem}.srt")
-        cap_path = work_dir / cap_file
-        cap_prev = "\n".join(cap_path.read_text(encoding="utf-8").splitlines()[:12]) if cap_path.exists() else ""
+        
+        cap_file = r.get("caption_file", "")
+        cap_path = None
+        if cap_file and (work_dir / cap_file).exists():
+            cap_path = work_dir / cap_file
+        else:
+            candidates = [
+                work_dir / "captions" / f"{Path(r['script_file']).stem}.srt",
+                work_dir / f"captions/{r['id']}.srt",
+            ]
+            for cand in candidates:
+                if cand.exists():
+                    cap_path = cand
+                    cap_file = str(cand.relative_to(work_dir))
+                    break
+        if not cap_file:
+            cap_file = f"captions/{Path(r.get('script_file', 'script')).stem}.srt"
+        cap_prev = "\n".join(cap_path.read_text(encoding="utf-8").splitlines()[:12]) if cap_path and cap_path.exists() else ""
         vals = [
             r["id"], r["title"], "Marathi" if r.get("language") == "mr" else "English",
             printed, r.get("youtube_url", ""), r.get("keywords", ""), r.get("description", ""),

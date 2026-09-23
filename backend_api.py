@@ -51,14 +51,13 @@ def root():
         "health": "/api/health",
         "endpoints": [
             "/api/health",
+            "/api/status/{issue_key}",
             "/api/analyze",
-            "/api/save-review",
-            "/api/generate-scripts",
-            "/api/generate-audio",
-            "/api/generate-videos",
-            "/api/generate-qr",
-            "/api/export-excel",
-            "/api/upload-drive",
+            "/api/review",
+            "/api/audio",
+            "/api/video",
+            "/api/links/{issue_key}",
+            "/api/qr",
             "/api/automate"
         ]
     }
@@ -189,7 +188,7 @@ def audio(payload: IssuePayload) -> dict:
     narrate(manifest, issue_dir, config)
     try:
         from generate_captions import main as gen_captions_main
-        gen_captions_main()
+        gen_captions_main(issue_dir, config)
     except Exception:
         pass
     copy_outputs(issue_dir, drive_paths)
@@ -235,7 +234,7 @@ def automate(payload: ReviewPayload) -> dict:
     # 3. Captions
     try:
         from generate_captions import main as gen_captions_main
-        gen_captions_main()
+        gen_captions_main(issue_dir, config)
     except Exception:
         pass
         

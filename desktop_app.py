@@ -242,12 +242,9 @@ class SampadaDesktopApp(tk.Tk):
             if pdf != saved_pdf:
                 shutil.copy2(pdf, saved_pdf)
             config = load_config(CONFIG_PATH)
-            is_august_sample = year == 2026 and month == 8
-            if not is_august_sample:
-                config = {**config, "include_full_magazine": False, "selected_pages": [], "article_titles": {}}
             manifest = extract_articles(saved_pdf, issue_dir, config)
             qr_pages = detect_qr_pdf_pages(saved_pdf, resolution=150)
-            frame = select_articles_containing_qr(manifest, qr_pages, use_existing_fallback=is_august_sample)
+            frame = select_articles_containing_qr(manifest, qr_pages, use_existing_fallback=True)
             return issue_dir, manifest, drive_paths, frame, qr_pages
 
         self._run("Analyzing article titles and scanning pages for QR codes…", task, self._analysis_complete)
@@ -332,9 +329,14 @@ class SampadaDesktopApp(tk.Tk):
     def create_audio(self) -> None:
         def task():
             narrate(self.manifest_path, self.issue_dir, self.config)
+            try:
+                from generate_captions import main as gen_captions_main
+                gen_captions_main(self.issue_dir, self.config)
+            except Exception:
+                pass
             copy_outputs(self.issue_dir, self.drive_paths)
             return self.drive_paths["audio"]
-        self._run("Creating multilingual narration. Internet access is required…", task, lambda output: self._done("Audio generation complete.", output))
+        self._run("Creating multilingual narration and captions. Internet access is required…", task, lambda output: self._done("Audio and caption generation complete.", output))
 
     def create_videos(self) -> None:
         def task():
