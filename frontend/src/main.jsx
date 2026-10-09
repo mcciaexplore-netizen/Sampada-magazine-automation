@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { CheckSquare, FileText, FolderOpen, Headphones, LoaderCircle, Play, QrCode, Sheet, Sparkles, Square, Upload, Video } from "lucide-react";
 import "./styles.css";
@@ -18,7 +18,7 @@ async function api(path, options = {}) {
     return data;
   } catch (err) {
     if (err.message === "Failed to fetch" || err.name === "TypeError") {
-      throw new Error("Backend server is waking up or unreachable. Please wait 30-45 seconds for Render to spin up and retry.");
+      throw new Error("Cannot reach the Sampada backend. Start it (uvicorn backend_api:app) or, on Render, wait 30-45 seconds for it to wake up, then retry.");
     }
     throw err;
   }
@@ -38,6 +38,11 @@ function App() {
   const [scriptsReady, setScriptsReady] = useState(false);
   const [folder, setFolder] = useState("");
   const [excelFile, setExcelFile] = useState("");
+  const [google, setGoogle] = useState({ configured: false, help: "" });
+  const [googleLinks, setGoogleLinks] = useState({ sheet_url: "", drive_folder_url: "" });
+
+  useEffect(() => { api("/api/google/status").then(setGoogle).catch(() => {}); }, []);
+  const keepGoogleLinks = (data) => { if (data.sheet_url) setGoogleLinks({ sheet_url: data.sheet_url, drive_folder_url: data.drive_folder_url }); };
 
   const selectedCount = useMemo(() => rows.filter(row => String(row.selected).toLowerCase() === "yes" || row.selected === true).length, [rows]);
   const allAudio = stats.selected > 0 && stats.audio >= stats.selected;
@@ -65,10 +70,11 @@ function App() {
     body.append("file", file); body.append("year", year); body.append("month", month); body.append("drive_root", driveRoot);
     const data = await api("/api/analyze", { method: "POST", body });
     setIssueKey(data.issue_key); setRows(data.rows); setStats(data.stats); setScriptsReady(false); setFolder(data.monthly_folder);
-    setNotice({ type: data.fallback ? "warning" : "success", text: data.fallback ? `Proof PDF analyzed. Loaded ${data.rows.filter(r => r.selected === 'yes').length} confirmed articles.` : `Found ${data.stats.selected} QR-enabled articles.` });
+    setGoogleLinks({ sheet_url: "", drive_folder_url: "" });
+    setNotice({ type: data.fallback ? "warning" : "success", text: data.fallback ? "No 'Scan the QR code to listen…' box or QR symbol was found in this PDF. Tick the articles you want manually." : `Found ${data.stats.selected} articles that end with a QR code.` });
   });
 
-  const runFullAutomation = () => run("Running full end-to-end automation (narration, 1080p videos, SRT captions, Excel plan & Google Drive upload)…", async () => {
+  const runFullAutomation = () => run("Running full end-to-end automation (narration, 1080p videos, SRT captions, Excel plan, Google Drive upload & Google Sheet)…", async () => {
     if (selectedCount === 0) {
       throw new Error("Please select at least one article checkbox before running automation.");
     }
@@ -81,6 +87,7 @@ function App() {
       setStats(data.stats);
       setScriptsReady(true);
       setExcelFile(data.xlsx || "");
+      keepGoogleLinks(data);
       setNotice({ type: "success", text: data.message });
     });
   });
@@ -114,7 +121,12 @@ function App() {
 
   const createQr = () => run("Creating QR codes…", async () => {
     const data = await api("/api/qr", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey, rows: links }) });
-    setStats(data.stats); setNotice({ type: "success", text: data.message, scriptsReady: true });
+    setStats(data.stats); keepGoogleLinks(data); setNotice({ type: "success", text: data.message });
+  });
+
+  const publishGoogle = () => run("Uploading audio, videos, captions and QR codes to Google Drive and updating the Google Sheet…", async () => {
+    const data = await api("/api/google/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ issue_key: issueKey }) });
+    setStats(data.stats || stats); keepGoogleLinks(data); setNotice({ type: "success", text: data.message });
   });
 
   const patchRow = (index, field, value) => setRows(currentRows => currentRows.map((row, i) => i === index ? { ...row, [field]: value } : row));
@@ -203,24 +215,27 @@ function App() {
         </div>
         <div className="actions">
           <button className="success" disabled={!selectedCount || busy} onClick={runFullAutomation}>
-            <Sparkles size={16}/> 1-Click Full Automation & Google Drive Upload
+            <Sparkles size={16}/> 1-Click: audio, videos, Drive upload & Google Sheet
           </button>
           <button disabled={!selectedCount || busy} onClick={saveReview}><Sheet size={16}/> Create Excel & scripts</button>
           <button disabled={!scriptsReady || busy} onClick={createAudio}><Headphones size={16}/> Create audio & captions</button>
           <button disabled={!stats.audio || busy} onClick={createVideos}><Video size={16}/> Create videos</button>
+          <button disabled={!stats.videos || busy || !google.configured} title={google.configured ? "" : google.help} onClick={publishGoogle}><Upload size={16}/> Upload to Google Drive & Sheet</button>
           <button disabled={busy} onClick={loadLinks}><QrCode size={16}/> YouTube links</button>
         </div>
       </section>
 
+      {!google.configured && <p className="folder"><span>Google Drive / Sheet upload is off: {google.help}</span></p>}
+      {googleLinks.sheet_url && <p className="folder"><Sheet size={15}/><span>Google Sheet: <a href={googleLinks.sheet_url} target="_blank" rel="noreferrer">{googleLinks.sheet_url}</a> · Drive folder: <a href={googleLinks.drive_folder_url} target="_blank" rel="noreferrer">open</a></span></p>}
       {excelFile && <p className="folder"><Sheet size={15}/><span>Excel workbook saved to: {excelFile}</span></p>}
 
       {links.length > 0 && <section className="card links">
-        <div className="section-title"><QrCode size={19}/><div><h2>YouTube links</h2><p>Paste each uploaded video URL, then generate matching QR codes.</p></div></div>
+        <div className="section-title"><QrCode size={19}/><div><h2>YouTube links</h2><p>Paste each uploaded YouTube URL, then generate the QR codes (they are added to the Google Sheet and Drive).</p></div></div>
         {links.map((row, index) => <label key={row.id}><span>{row.title}</span><input placeholder="https://youtu.be/…" value={row.youtube_url || ''} onChange={e => patchLink(index, e.target.value)}/></label>)}
         <button className="primary" disabled={busy} onClick={createQr}><QrCode size={16}/> Create QR codes</button>
       </section>}
 
-      {folder && <p className="folder"><FolderOpen size={15}/><span>Target Drive folder: {folder}</span></p>}
+      {folder && <p className="folder"><FolderOpen size={15}/><span>Local output folder: {folder}</span></p>}
     </>}
   </main>;
 }

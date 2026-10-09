@@ -77,6 +77,11 @@ def load_config(path: Path) -> dict:
         return json.load(stream)
 
 
+def issue_overrides(config: dict, issue_key: str) -> dict:
+    """Per-issue manual overrides (titles, video titles, categories), keyed by YYYY-MM."""
+    return config.get("issue_overrides", {}).get(issue_key, {})
+
+
 def detect_language(text: str) -> str:
     devanagari = len(re.findall(r"[\u0900-\u097f]", text))
     latin = len(re.findall(r"[A-Za-z]", text))
@@ -132,22 +137,52 @@ def contents_page_numbers(page: pdfplumber.page.Page) -> list[int]:
     return sorted(number for number in found if 2 <= number <= 200)
 
 
-def title_from_page(page: pdfplumber.page.Page, fallback: str) -> str:
-    words = page.extract_words(extra_attrs=["size"])
-    if not words:
-        return fallback
-    max_size = max(float(word.get("size", 0)) for word in words)
-    large = [word for word in words if float(word.get("size", 0)) >= max_size * 0.72]
-    large.sort(key=lambda word: (round(float(word["top"]) / 8), float(word["x0"])))
-    lines: dict[int, list[str]] = {}
-    for word in large:
-        if float(word["top"]) > page.height * 0.55:
+def title_words(page: pdfplumber.page.Page) -> list[dict]:
+    """Words that make up the headline of an article start page (largest real text, drop caps ignored)."""
+    all_words = [w for w in page.extract_words(extra_attrs=["size"]) if float(w["top"]) < page.height * 0.8]
+    real = [w for w in all_words if len(w["text"]) > 1]
+    if not real:
+        return []
+    body_size = Counter(round(float(w["size"]), 1) for w in real).most_common(1)[0][0]
+    for size in sorted({round(float(w["size"]), 1) for w in real}, reverse=True):
+        if size <= body_size * 1.3:
+            break
+        group = [w for w in all_words if abs(float(w["size"]) - size) < 0.6]
+        tokens = [w["text"] for w in group]
+        if len(group) < 2 and len(tokens[0]) < 6:
             continue
-        key = round(float(word["top"]) / 8)
-        lines.setdefault(key, []).append(word["text"])
-    candidate = " ".join(" ".join(lines[key]) for key in sorted(lines))
-    candidate = re.sub(r"\s+", " ", candidate).strip()
+        if sum(len(t) == 1 and t.isalpha() for t in tokens) > len(tokens) * 0.5:
+            continue
+        return group
+    return []
+
+
+def title_from_page(page: pdfplumber.page.Page, fallback: str) -> str:
+    group = title_words(page)
+    if not group:
+        return fallback
+    group.sort(key=lambda w: (round(float(w["top"]) / 6), float(w["x0"])))
+    candidate = re.sub(r"\s+", " ", " ".join(w["text"] for w in group)).strip()
     return candidate if 4 <= len(candidate) <= 180 else fallback
+
+
+QR_PLACEHOLDER = re.compile(r"scan\s+the\s+qr", re.I)
+QR_NOISE = re.compile(r"scan\s+the\s+qr(?:\s+code)?(?:\s+to)?|listen\s+to\s+the\s+gist\s+of\s+the(?:\s+article)?", re.I)
+
+
+def strip_qr_noise(text: str) -> str:
+    return re.sub(r"[ 	]{2,}", " ", QR_NOISE.sub("", text))
+
+
+def find_qr_placeholder_pages(pdf: pdfplumber.PDF) -> list[int]:
+    """1-based PDF pages carrying the "Scan the QR code to listen..." box (page 1 is the contents note)."""
+    found = []
+    for index, page in enumerate(pdf.pages):
+        if index == 0:
+            continue
+        if QR_PLACEHOLDER.search(page.extract_text() or ""):
+            found.append(index + 1)
+    return found
 
 
 def infer_offset(pdf: pdfplumber.PDF, entries: list[tuple[str, int]]) -> int:
@@ -182,7 +217,7 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
         rows = []
         all_page_text = []
         for page in pdf.pages:
-            text = clean_text(page.extract_text() or "")
+            text = strip_qr_noise(clean_text(page.extract_text() or ""))
             if text:
                 all_page_text.append(text)
         if config.get("include_full_magazine", False):
@@ -194,15 +229,15 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
                 "pdf_end_page": len(pdf.pages), "language": "en",
                 "title": "August Full Magazine", "article_file": str(full_file.relative_to(output_dir)),
             })
-        selected_pages = {int(value) for value in config.get("selected_pages", [])}
-        title_overrides = {int(key): value for key, value in config.get("article_titles", {}).items()}
+        overrides = issue_overrides(config, output_dir.name)
+        title_overrides = {int(key): value for key, value in overrides.get("article_titles", {}).items()}
         for i, (toc_title, printed_start) in enumerate(valid):
             next_printed = valid[i + 1][1] if i + 1 < len(valid) else len(pdf.pages) + offset + 1
             start_idx = page_number_to_pdf_index(printed_start, offset)
             end_idx = min(len(pdf.pages) - 1, page_number_to_pdf_index(next_printed, offset) - 1)
             if end_idx < start_idx:
                 end_idx = start_idx
-            page_texts = [clean_text(pdf.pages[p].extract_text() or "") for p in range(start_idx, end_idx + 1)]
+            page_texts = [strip_qr_noise(clean_text(pdf.pages[p].extract_text() or "")) for p in range(start_idx, end_idx + 1)]
             body = "\n\n".join(text for text in page_texts if text)
             title = title_overrides.get(printed_start, title_from_page(pdf.pages[start_idx], toc_title))
             slug = slugify(title)
@@ -210,7 +245,7 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
             article_file.write_text(body, encoding="utf-8")
             rows.append({
                 "id": f"p{printed_start:03d}",
-                "selected": "yes" if not selected_pages or printed_start in selected_pages else "no",
+                "selected": "yes",
                 "printed_start_page": printed_start,
                 "printed_end_page": max(printed_start, next_printed - 1),
                 "pdf_start_page": start_idx + 1,
@@ -249,6 +284,10 @@ def keywords_for(text: str, title: str, limit: int = 25) -> list[str]:
     return [word for word, _ in counts.most_common(limit)]
 
 
+LEAD_NOISE = ("| sampada", "sampada |", "@gmail.com", "@mcciapune.com", "shutterstock", "adobe stock", "moc.kcot", "kcotsrettuhs")
+LEAD_LABELS = {"cover story", "analysis", "conversations", "discoveries", "briefings", "etcetera", "innovation", "advocacy", "roundtable", "materials"}
+
+
 def extract_clean_lead(body: str, title: str) -> str:
     paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
     for p in paragraphs:
@@ -256,9 +295,9 @@ def extract_clean_lead(body: str, title: str) -> str:
         valid_lines = []
         for l in lines:
             ll = l.lower()
-            if any(noise in ll for noise in ("moc.kcot", "kcotsrettuhs", "drone day", "aerial day", "| sampada", "team mccia", "september 2026", "@gmail.com", "shutterstock")):
+            if any(noise in ll for noise in LEAD_NOISE) or re.search(r"scan\s+the\s+qr", ll):
                 continue
-            if len(l) < 25 and (l.isupper() or "story" in ll or "outlook" in ll or "innovation" in ll or "advocacy" in ll or "roundtable" in ll or "materials" in ll):
+            if len(l) < 25 and (l.isupper() or ll in LEAD_LABELS):
                 continue
             valid_lines.append(l)
         clean_p = " ".join(valid_lines).strip()
@@ -273,15 +312,12 @@ def extract_clean_lead(body: str, title: str) -> str:
 def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
     metadata_dir = work_dir / "metadata"
     scripts_dir = work_dir / "scripts"
-    for generated_dir in (metadata_dir, scripts_dir):
-        if generated_dir.exists():
-            shutil.rmtree(generated_dir)
     metadata_dir.mkdir(exist_ok=True)
     scripts_dir.mkdir(exist_ok=True)
     output_rows = []
     for row in iter_manifest(manifest):
         article_path = work_dir / row["article_file"]
-        raw_article = article_path.read_text(encoding="utf-8")
+        raw_article = strip_qr_noise(article_path.read_text(encoding="utf-8"))
         body = clean_text(raw_article)
         title = row["title"].strip()
         paragraphs = [p.strip() for p in body.split("\n\n") if len(p.strip()) > 60]
@@ -313,7 +349,8 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
         mslug = media_slug(title)
         script_path = scripts_dir / f"{mslug}.txt"
         meta_path = metadata_dir / f"{mslug}.json"
-        script_path.write_text(script, encoding="utf-8")
+        if not script_path.exists() or script_path.read_text(encoding="utf-8") != script:
+            script_path.write_text(script, encoding="utf-8")
         meta = {"id": row["id"], "title": title[:100], "description": description, "keywords": keywords, "language": row["language"], "script_file": str(script_path.relative_to(work_dir))}
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
         output_rows.append({
@@ -378,7 +415,7 @@ def _narrate_row(row: dict, work_dir: Path, config: dict, audio_dir: Path) -> Pa
             raise FileNotFoundError(f"Run metadata first: {script_path}")
     output = audio_dir / f"{mslug}.mp3"
     reuse = config.get("performance", {}).get("reuse_completed_files", True)
-    if reuse and output.exists() and output.stat().st_size > 4096:
+    if reuse and output.exists() and output.stat().st_size > 4096 and output.stat().st_mtime >= script_path.stat().st_mtime:
         return output
     script_text = script_path.read_text(encoding="utf-8")
     script_lang = detect_language(script_text)
@@ -448,7 +485,47 @@ def find_font(size: int, prefer_bold: bool = False, is_devanagari: bool = False)
     return ImageFont.load_default()
 
 
-def title_card(title: str, subtitle: str, output: Path, config: dict, article_id: str = "", category: str = "", pdf_path: Path | None = None) -> None:
+def crop_title_from_pdf(pdf_path: Path, pdf_page: int) -> Image.Image | None:
+    """Render the headline of an article start page as an image (needed for Devanagari, which PIL cannot shape)."""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            page = pdf.pages[pdf_page - 1]
+            group = title_words(page)
+            if not group:
+                return None
+            x0 = max(0, min(float(w["x0"]) for w in group) - 4)
+            x1 = min(float(page.width), max(float(w["x1"]) for w in group) + 4)
+            y0 = max(0, min(float(w["top"]) for w in group))
+            y1 = min(float(page.height), max(float(w["bottom"]) for w in group))
+            crop = page.crop((x0, y0, x1, y1)).to_image(resolution=300).original.convert("RGB")
+    except Exception:
+        return None
+    return crop
+
+
+def paste_pdf_title(image: Image.Image, crop: Image.Image, width: int, top: int, bottom: int, scale: float) -> None:
+    gray = crop.convert("L")
+    dark_text = gray.resize((1, 1)).getpixel((0, 0)) > 110
+    mask_src = gray.point(lambda p: 255 if p < 150 else 0) if dark_text else gray.point(lambda p: 255 if p > 150 else 0)
+    bbox = mask_src.getbbox()
+    if bbox:
+        crop, mask_src = crop.crop(bbox), mask_src.crop(bbox)
+    target_w = min(int(width * 0.84), int(crop.width * 3))
+    ratio = target_w / crop.width
+    target_h = int(crop.height * ratio)
+    max_h = bottom - top - int(60 * scale)
+    if target_h > max_h:
+        ratio = max_h / crop.height
+        target_w, target_h = int(crop.width * ratio), max_h
+    mask = mask_src.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    draw = ImageDraw.Draw(image)
+    box_w, box_h = target_w + int(40 * scale), target_h + int(22 * scale)
+    gx, gy = (width - box_w) // 2, (top + bottom - box_h) // 2
+    draw.rectangle((gx, gy, gx + box_w, gy + box_h), fill="#159447")
+    image.paste(Image.new("RGB", (target_w, target_h), (255, 255, 255)), ((width - target_w) // 2, (top + bottom - target_h) // 2), mask=mask)
+
+
+def title_card(title: str, subtitle: str, output: Path, config: dict, article_id: str = "", category: str = "", pdf_path: Path | None = None, pdf_page: int = 0) -> None:
     width, height = config["video"]["width"], config["video"]["height"]
     template_value = config.get("video", {}).get("template", "")
     template_path = ROOT / template_value if template_value else None
@@ -457,7 +534,7 @@ def title_card(title: str, subtitle: str, output: Path, config: dict, article_id
         draw = ImageDraw.Draw(image)
         scale = width / 1280
         top, bottom, split = int(286 * scale), int(447 * scale), int(430 * scale)
-        
+
         # 1. Clear default middle banner area
         draw.rectangle((0, top, split, bottom), fill="#0E5F9F")
         draw.rectangle((split, top, width, bottom), fill="#F5F3EF")
@@ -473,88 +550,24 @@ def title_card(title: str, subtitle: str, output: Path, config: dict, article_id
             draw.line((int(x * scale), int(30 * scale), int(x * scale), int(240 * scale)), fill=grid, width=max(1, int(2 * scale)))
         draw.line((int(700 * scale), int(146 * scale), int(1220 * scale), int(146 * scale)), fill=grid, width=max(1, int(2 * scale)))
 
-        # 3. Draw accurate Article Category / Keyword Badge in top-right
-        badge_text = category or config.get("video", {}).get("article_categories", {}).get(article_id, "")
-        if badge_text:
-            is_mr = any(ord(c) > 128 for c in badge_text)
-            if is_mr and article_id in {"p047", "p053"} and pdf_path and pdf_path.exists():
-                try:
-                    with pdfplumber.open(pdf_path) as pdf:
-                        page_idx = 44 if article_id == "p047" else 50
-                        p_img = pdf.pages[page_idx].to_image(resolution=300).original
-                        w_p, h_p = p_img.size
-                        cat_crop = p_img.crop((int(w_p * 0.35), int(h_p * 0.045), int(w_p * 0.65), int(h_p * 0.085)))
-                        c_gray = cat_crop.convert("L")
-                        c_bbox = c_gray.point(lambda p: 255 if p < 200 else 0).getbbox()
-                        if c_bbox:
-                            cat_crop = cat_crop.crop(c_bbox)
-                        target_bw = 230 if article_id == "p047" else 180
-                        ratio = target_bw / cat_crop.width
-                        target_bh = int(cat_crop.height * ratio)
-                        cat_resized = cat_crop.resize((target_bw, target_bh), Image.Resampling.LANCZOS)
-                        bx = int((1050 if article_id == "p047" else 1070) * scale) - target_bw // 2
-                        by = int(95 * scale)
-                        pad_x, pad_y = int(22 * scale), int(10 * scale)
-                        draw.rounded_rectangle((bx - pad_x, by - pad_y, bx + target_bw + pad_x, by + target_bh + pad_y), radius=12, fill="#E8F5E9", outline="#0D7038", width=max(1, int(2 * scale)))
-                        c_mask = cat_resized.convert("L").point(lambda p: 255 if p < 180 else 0)
-                        green_layer = Image.new("RGB", cat_resized.size, (13, 112, 56))
-                        image.paste(green_layer, (bx, by), mask=c_mask)
-                except Exception:
-                    b_font = find_font(max(20, int(32 * scale)), is_devanagari=True)
-                    box = draw.textbbox((0, 0), badge_text, font=b_font)
-                    bw, bh = box[2] - box[0], box[3] - box[1]
-                    bx = int(1050 * scale) - bw // 2
-                    by = int(110 * scale)
-                    pad_x, pad_y = int(22 * scale), int(10 * scale)
-                    draw.rounded_rectangle((bx - pad_x, by - pad_y, bx + bw + pad_x, by + bh + pad_y + 4), radius=12, fill="#E8F5E9", outline="#0D7038", width=max(1, int(2 * scale)))
-                    draw.text((bx, by), badge_text, font=b_font, fill="#0D7038")
-            else:
-                b_font = find_font(max(20, int(34 * scale)), prefer_bold=True, is_devanagari=is_mr)
-                box = draw.textbbox((0, 0), badge_text, font=b_font)
-                bw, bh = box[2] - box[0], box[3] - box[1]
-                bx = int(1050 * scale) - bw // 2
-                by = int(110 * scale)
-                pad_x, pad_y = int(22 * scale), int(10 * scale)
-                draw.rounded_rectangle((bx - pad_x, by - pad_y, bx + bw + pad_x, by + bh + pad_y + 4), radius=12, fill="#E8F5E9", outline="#0D7038", width=max(1, int(2 * scale)))
-                draw.text((bx, by), badge_text, font=b_font, fill="#0D7038")
+        # 3. Optional category badge (only when configured for this issue)
+        if category:
+            b_font = find_font(max(20, int(34 * scale)), prefer_bold=True, is_devanagari=any(ord(c) > 128 for c in category))
+            box = draw.textbbox((0, 0), category, font=b_font)
+            bw, bh = box[2] - box[0], box[3] - box[1]
+            bx, by = int(1050 * scale) - bw // 2, int(110 * scale)
+            pad_x, pad_y = int(22 * scale), int(10 * scale)
+            draw.rounded_rectangle((bx - pad_x, by - pad_y, bx + bw + pad_x, by + bh + pad_y + 4), radius=12, fill="#E8F5E9", outline="#0D7038", width=max(1, int(2 * scale)))
+            draw.text((bx, by), category, font=b_font, fill="#0D7038")
 
-        # 4. Render Article Title cleanly
-        if article_id in {"p047", "p053"} and pdf_path and pdf_path.exists():
-            try:
-                with pdfplumber.open(pdf_path) as pdf:
-                    page_idx = 44 if article_id == "p047" else 50
-                    p_img = pdf.pages[page_idx].to_image(resolution=300).original
-                    w_p, h_p = p_img.size
-                    if article_id == "p047":
-                        t_crop = p_img.crop((int(w_p * 0.05), int(h_p * 0.505), int(w_p * 0.95), int(h_p * 0.635)))
-                        target_tw = int(width * 0.82)
-                    else:
-                        t_crop = p_img.crop((int(w_p * 0.04), int(h_p * 0.238), int(w_p * 0.96), int(h_p * 0.325)))
-                        target_tw = int(width * 0.86)
-                    
-                    t_gray = t_crop.convert("L")
-                    t_bbox = t_gray.point(lambda p: 255 if p < 200 else 0).getbbox()
-                    if t_bbox:
-                        t_crop = t_crop.crop(t_bbox)
-                    
-                    t_ratio = target_tw / t_crop.width
-                    target_th = int(t_crop.height * t_ratio)
-                    title_resized = t_crop.resize((target_tw, target_th), Image.Resampling.LANCZOS)
-
-                    green_box_w = target_tw + int(40 * scale)
-                    green_box_h = target_th + int(22 * scale)
-                    gx = (width - green_box_w) // 2
-                    gy = (top + bottom - green_box_h) // 2
-                    draw.rectangle((gx, gy, gx + green_box_w, gy + green_box_h), fill="#159447")
-                    
-                    t_mask = title_resized.convert("L").point(lambda p: 255 if p < 150 else 0)
-                    white_layer = Image.new("RGB", title_resized.size, (255, 255, 255))
-                    image.paste(white_layer, ((width - target_tw) // 2, (top + bottom - target_th) // 2), mask=t_mask)
-                    output.parent.mkdir(exist_ok=True)
-                    image.save(output, quality=95)
-                    return
-            except Exception:
-                pass
+        # 4. Title: Devanagari headlines are cropped from the magazine page itself
+        if re.search(r"[ऀ-ॿ]", title) and pdf_path and pdf_path.exists() and pdf_page:
+            crop = crop_title_from_pdf(pdf_path, pdf_page)
+            if crop is not None:
+                paste_pdf_title(image, crop, width, top, bottom, scale)
+                output.parent.mkdir(exist_ok=True)
+                image.save(output, quality=95)
+                return
 
         font = find_font(max(24, int(39 * scale)), prefer_bold=True, is_devanagari=(detect_language(title) == "mr"))
         words = title.split()
@@ -624,10 +637,11 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
     video = videos / f"{mslug}.mp4"
 
     reuse = config.get("performance", {}).get("reuse_completed_files", True)
-    if reuse and video.exists() and video.stat().st_size > 100_000:
+    if reuse and video.exists() and video.stat().st_size > 100_000 and video.stat().st_mtime >= audio.stat().st_mtime:
         return video
-    display_title = config.get("video", {}).get("title_overrides", {}).get(row["id"], row["title"])
-    category = config.get("video", {}).get("article_categories", {}).get(row["id"], "")
+    overrides = issue_overrides(config, work_dir.name)
+    display_title = overrides.get("title_overrides", {}).get(row["id"], row["title"])
+    category = overrides.get("article_categories", {}).get(row["id"], "")
     title_card(
         display_title,
         f"{config['magazine_name']} | {config['publisher']}",
@@ -635,7 +649,8 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
         config,
         article_id=row["id"],
         category=category,
-        pdf_path=pdf_path
+        pdf_path=pdf_path,
+        pdf_page=int(row.get("pdf_start_page") or 0),
     )
     fps = str(max(1, int(config.get("video", {}).get("fps", 1))))
     cmd = [

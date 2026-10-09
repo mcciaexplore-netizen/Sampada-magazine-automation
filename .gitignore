@@ -34,3 +34,7 @@ p51_crop.png
 .DS_Store
 Thumbs.db
 
+
+# Google credentials
+google_credentials.json
+google_token.json

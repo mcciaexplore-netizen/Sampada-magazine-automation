@@ -13,6 +13,7 @@ import pdfplumber
 
 from main import (
     create_links_template,
+    find_qr_placeholder_pages,
     extract_articles,
     load_config,
     make_qr_codes,
@@ -53,6 +54,19 @@ def monthly_paths(base: Path, year: int, month: int) -> dict[str, Path]:
 
 
 def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 96) -> list[int]:
+    """1-based PDF pages that carry a QR code.
+
+    Proof PDFs contain a "Scan the QR code to listen..." placeholder box at the end of each article;
+    final PDFs contain real QR symbols. The placeholder is checked first (fast); the image scan
+    is only used when no placeholder text exists.
+    """
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            placeholders = find_qr_placeholder_pages(pdf)
+    except Exception:
+        placeholders = []
+    if placeholders:
+        return placeholders
     try:
         import cv2
         import numpy as np
@@ -64,46 +78,34 @@ def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 96) -> list[int]:
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for index, page in enumerate(pdf.pages):
+                if index == 0:
+                    continue
                 try:
-                    img_obj = page.to_image(resolution=resolution, antialias=False)
-                    rgb = np.array(img_obj.original.convert("RGB"))
-                    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+                    img_obj = page.to_image(resolution=max(resolution, 110), antialias=False)
+                    gray = cv2.cvtColor(np.array(img_obj.original.convert("RGB")), cv2.COLOR_RGB2GRAY)
                     ok, _points = detector.detectMulti(gray)
                     if ok:
                         found.append(index + 1)
-                    del rgb, gray, img_obj
+                    del gray, img_obj
                 except Exception:
                     continue
-        import gc
         gc.collect()
     except Exception:
         pass
     return found
 
 
-def select_articles_containing_qr(manifest: Path, qr_pdf_pages: list[int], use_existing_fallback: bool = True) -> pd.DataFrame:
+def select_articles_containing_qr(manifest: Path, qr_pdf_pages: list[int], use_existing_fallback: bool = False) -> pd.DataFrame:
+    """Select every article whose page range contains a QR page. Nothing is guessed when none is found."""
     frame = pd.read_csv(manifest, encoding="utf-8-sig")
-    config = load_config(CONFIG_PATH) if CONFIG_PATH.exists() else {}
-    selected_pages = set(config.get("selected_pages", []))
-    if qr_pdf_pages:
-        frame["selected"] = frame.apply(
-            lambda row: "yes" if any(int(row.pdf_start_page) <= page <= int(row.pdf_end_page) for page in qr_pdf_pages) else "no",
-            axis=1,
-        )
-        frame["selection_reason"] = frame.apply(
-            lambda row: "QR detected in article pages" if row["selected"] == "yes" else "No QR detected",
-            axis=1,
-        )
+    qr_pages = {int(page) for page in qr_pdf_pages}
+    if qr_pages:
+        hit = frame.apply(lambda row: any(int(row.pdf_start_page) <= page <= int(row.pdf_end_page) for page in qr_pages), axis=1)
+        frame["selected"] = hit.map({True: "yes", False: "no"})
+        frame["selection_reason"] = hit.map({True: "QR at end of article", False: "No QR in article"})
     else:
-        if selected_pages:
-            frame["selected"] = frame["printed_start_page"].astype(int).map(lambda p: "yes" if p in selected_pages else "no")
-            frame["selection_reason"] = frame["selected"].map({"yes": "Config / proof selection", "no": "Unselected"})
-        else:
-            if not use_existing_fallback:
-                frame["selected"] = "no"
-            frame["selection_reason"] = frame["selected"].map(
-                {"yes": "Proof fallback / review required", "no": "No QR detected"}
-            )
+        frame["selected"] = "no"
+        frame["selection_reason"] = "No QR found - tick manually"
     frame.to_csv(manifest, index=False, encoding="utf-8-sig")
     return frame
 
@@ -138,6 +140,10 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
             manifest_rows = list(csv.DictReader(f))
 
     manifest_map = {r["id"]: r for r in manifest_rows}
+    link_map = {}
+    if links_path.exists():
+        with links_path.open("r", encoding="utf-8-sig") as f:
+            link_map = {r["id"]: r.get("youtube_url", "") for r in csv.DictReader(f)}
 
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -196,7 +202,7 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
         cap_prev = "\n".join(cap_path.read_text(encoding="utf-8").splitlines()[:12]) if cap_path and cap_path.exists() else ""
         vals = [
             r["id"], r["title"], "Marathi" if r.get("language") == "mr" else "English",
-            printed, r.get("youtube_url", ""), r.get("keywords", ""), r.get("description", ""),
+            printed, r.get("youtube_url") or link_map.get(r["id"], ""), r.get("keywords", ""), r.get("description", ""),
             r.get("video_file", ""), r.get("audio_file", ""), cap_file, cap_prev
         ]
         ws_plan.append(vals)

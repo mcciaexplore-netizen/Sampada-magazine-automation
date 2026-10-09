@@ -7,28 +7,15 @@
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "backend_api.py",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "backend_api.py"
-    },
-    {
-      "src": "/docs(.*)",
-      "dest": "backend_api.py"
-    },
-    {
-      "src": "/openapi.json",
-      "dest": "backend_api.py"
+      "handle": "filesystem"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/$1"
+      "dest": "/index.html"
     }
   ]
 }

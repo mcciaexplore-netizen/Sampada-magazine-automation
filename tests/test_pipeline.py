@@ -31,3 +31,32 @@ def test_long_narration_is_chunked_without_loss():
     chunks = split_narration(text, limit=100)
     assert len(chunks) > 2
     assert "First paragraph." in chunks[0]
+
+
+def test_qr_placeholder_text_is_stripped():
+    from main import strip_qr_noise
+    text = "Final sentence. Scan the QR code to listen to the gist of the article."
+    assert "scan" not in strip_qr_noise(text).lower()
+    assert strip_qr_noise(text).startswith("Final sentence.")
+
+
+def test_articles_selected_only_when_qr_inside_range():
+    import tempfile
+    from pathlib import Path
+    import pandas as pd
+    from magazine_app import select_articles_containing_qr
+    manifest = Path(tempfile.mkdtemp()) / "manifest.csv"
+    pd.DataFrame([
+        {"id": "p005", "pdf_start_page": 3, "pdf_end_page": 5, "selected": "yes"},
+        {"id": "p008", "pdf_start_page": 6, "pdf_end_page": 12, "selected": "yes"},
+    ]).to_csv(manifest, index=False)
+    frame = select_articles_containing_qr(manifest, [12])
+    assert list(frame["selected"]) == ["no", "yes"]
+    assert set(select_articles_containing_qr(manifest, [])["selected"]) == {"no"}
+
+
+def test_issue_overrides_are_per_issue():
+    from main import issue_overrides
+    config = {"issue_overrides": {"2026-08": {"article_titles": {"5": "X"}}}}
+    assert issue_overrides(config, "2026-08")["article_titles"]["5"] == "X"
+    assert issue_overrides(config, "2026-09") == {}

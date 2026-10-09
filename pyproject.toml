@@ -18,11 +18,15 @@ dependencies = [
     "fastapi>=0.100",
     "uvicorn>=0.20",
     "python-multipart>=0.0.9",
-    "openpyxl>=3.1"
+    "openpyxl>=3.1",
+    "opencv-python-headless>=5.0",
+    "google-api-python-client>=2.100",
+    "google-auth>=2.30",
+    "google-auth-oauthlib>=1.2"
 ]
 
 [tool.vercel]
 entrypoint = "backend_api:app"
 
 [tool.setuptools]
-py-modules = ["backend_api", "main", "generate_captions", "generate_summary_video", "video_overlay"]
+py-modules = ["backend_api", "main", "generate_captions", "google_drive", "magazine_app"]

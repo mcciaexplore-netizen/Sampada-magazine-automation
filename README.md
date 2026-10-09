@@ -1,5 +1,23 @@
 # Sampada magazine-to-YouTube automation
 
+## How it works
+
+1. Upload the Sampada PDF. Every article ends with a "Scan the QR code to listen to the gist of the article" box (or a real QR in the final PDF); articles whose pages contain it are selected automatically. If none is found, tick articles manually.
+2. One click generates narration audio, SRT captions, 1080p videos and the Excel plan, uploads Audio / Videos / Captions to Google Drive and writes a Google Sheet (article, audio link, video link, YouTube title, description, captions, YouTube link, QR link).
+3. Upload the videos to YouTube, paste the YouTube links in the app, and it creates the QR codes, uploads them to Drive and fills the Sheet's YouTube link and QR columns.
+
+## Google Drive / Sheet setup (one time)
+
+1. Google Cloud Console: create a project, enable **Google Drive API** and **Google Sheets API**.
+2. Credentials > Create OAuth client ID > Desktop app. Download the JSON and save it as `google_credentials.json` in this folder.
+3. Restart the backend. The first upload opens a browser to sign in (token cached in `google_token.json`).
+
+Alternatives: `GOOGLE_SERVICE_ACCOUNT_JSON` (key path or JSON) with `GOOGLE_DRIVE_FOLDER_ID` for a shared folder; `GOOGLE_DRIVE_PUBLIC=1` to make links viewable by anyone with the link. Production CORS: set `CORS_ORIGINS` (comma separated). Deploy the frontend on Vercel (`VITE_API_BASE_URL` = backend URL) and the backend on Render/locally.
+
+Per-issue manual overrides (titles, video titles, category badges) live in `config.json` under `issue_overrides` keyed by `YYYY-MM`.
+
+Known limit: Marathi pages in the PDF use a legacy font, so extracted Marathi text is garbled. Marathi video title cards are cropped from the page image and look correct, but edit Marathi titles/scripts by hand before narration.
+
 ## React frontend
 
 Double-click `start_react_frontend.bat`, or start the two services separately:
@@ -17,84 +35,3 @@ Audio generation runs up to four articles concurrently and video rendering runs 
 All narration is generated with Microsoft Edge's `en-IN-NeerjaNeural` English voice at a `+10%` speaking rate. This provides a strong quality/speed balance without downloading a large local speech model.
 
 This project converts a selectable-text Sampada PDF into reviewable article text, YouTube metadata, multilingual narration, 1080p videos, and QR codes for manually uploaded YouTube videos.
-
-## Native Python desktop frontend
-
-Double-click `start_desktop_app.bat`, or run:
-
-```powershell
-.\.venv\Scripts\python.exe desktop_app.py
-```
-
-The native Tkinter application uses standard Windows file pickers and does not require a browser, web server, port, upload, or persistent network connection. Long operations run in background threads so the window remains responsive.
-
-## Previous Streamlit frontend
-
-Start the application on Windows:
-
-```powershell
-.\.venv\Scripts\streamlit.exe run streamlit_app.py
-```
-
-In the sidebar, choose the edition month/year and a folder synchronized by Google Drive for desktop. The app creates:
-
-```text
-Sampada\YYYY\MM - Month\
-  Audio\
-  Videos\
-  QR Codes\
-  Data\
-```
-
-Final editions are scanned for real QR symbols and only matching article ranges are selected. Proof PDFs without embedded QR symbols stop for a human review; the supplied August 2026 proof uses the confirmed 18-row example as its fallback.
-
-## Workflow
-
-1. Extract titles and article text from the magazine.
-2. Review `work/manifest.csv`. Set `selected` to `no` for anything that should not become a video, and correct titles if needed.
-3. Generate `work/youtube_metadata.csv` and narration scripts.
-4. Review the descriptions/scripts, then create audio and videos.
-5. Upload the videos to YouTube manually.
-6. Create `work/youtube_links.csv`, paste each YouTube URL, and generate QR codes.
-
-## Setup
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-Use the bundled Codex Python if your normal Python does not have the packages:
-
-```powershell
-& 'C:\Users\Aarushi Gupta\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pip install -r requirements.txt
-```
-
-## Commands
-
-```powershell
-$pdf = 'C:\Users\Aarushi Gupta\Downloads\Sampada_MCCIA_August 2026_Proof_26-8-2026.pdf'
-python main.py extract $pdf
-python main.py metadata
-python main.py narrate
-python main.py video
-python main.py links
-# Paste URLs into work\youtube_links.csv
-python main.py qr
-```
-
-To run extraction through video rendering in one command:
-
-```powershell
-python main.py all $pdf
-```
-
-`narrate` uses Microsoft Edge's online neural voices, so it requires internet access. The configured defaults are `en-IN-NeerjaNeural` for English and `mr-IN-AarohiNeural` for Marathi. Video rendering uses the FFmpeg binary supplied by `imageio-ffmpeg`.
-
-The supplied configuration follows the provided 18-row example: one full-magazine item plus 17 selected articles. Change `selected_pages` or `article_titles` in `config.json` for a different issue.
-
-## Important review points
-
-- PDF layouts vary. Always check `manifest.csv`, especially wrapped headings and article page ranges.
-- The metadata generator is deterministic and does not invent facts. Human editing is recommended for marketing polish.
-- Long articles and the full-magazine narration are split into safe TTS chunks and rejoined automatically.
-- The tool does not publish to YouTube or modify the magazine PDF. Manual uploading keeps account credentials out of the automation.

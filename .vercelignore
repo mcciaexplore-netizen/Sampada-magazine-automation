@@ -10,3 +10,5 @@ __pycache__/
 *.mp3
 *.pdf
 
+google_credentials.json
+google_token.json
