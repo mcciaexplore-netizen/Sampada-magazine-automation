@@ -175,21 +175,34 @@ def strip_qr_noise(text: str) -> str:
     return re.sub(r"[ 	]{2,}", " ", QR_NOISE.sub("", text))
 
 
-def find_qr_placeholder_pages(pdf: pdfplumber.PDF) -> list[int]:
+_TEXT_CACHE: dict[tuple[str, int], list[str]] = {}
+
+
+def pdf_page_texts(pdf_path: Path) -> list[str]:
+    """Plain text of every page (pdfium is ~50x faster than pdfminer). Cached per file version."""
+    import pypdfium2 as pdfium
+    key = (str(pdf_path), Path(pdf_path).stat().st_mtime_ns)
+    if key not in _TEXT_CACHE:
+        document = pdfium.PdfDocument(str(pdf_path))
+        try:
+            _TEXT_CACHE[key] = [(document[i].get_textpage().get_text_range() or "").replace(chr(13) + chr(10), chr(10)) for i in range(len(document))]
+        finally:
+            document.close()
+    return _TEXT_CACHE[key]
+
+
+def find_qr_placeholder_pages(texts: list[str]) -> list[int]:
     """1-based PDF pages carrying the "Scan the QR code to listen..." box (page 1 is the contents note)."""
     found = []
-    for index, page in enumerate(pdf.pages):
-        if index == 0:
-            continue
-        if QR_PLACEHOLDER.search(page.extract_text() or ""):
+    for index, text in enumerate(texts):
+        if index and QR_PLACEHOLDER.search(text):
             found.append(index + 1)
     return found
 
 
-def infer_offset(pdf: pdfplumber.PDF, entries: list[tuple[str, int]]) -> int:
+def infer_offset(texts: list[str]) -> int:
     offsets: list[int] = []
-    for index, page in enumerate(pdf.pages):
-        text = page.extract_text() or ""
+    for index, text in enumerate(texts):
         matches = re.findall(r"(?:^|\n)\s*(\d{1,3})\s*\|\s*SAMPADA", text, re.I)
         matches += re.findall(r"SAMPADA\s*\|\s*(?:[A-Za-z]+\s+\d{4}\s*\|\s*)?(\d{1,3})", text, re.I)
         for value in matches:
@@ -210,17 +223,14 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
     with pdfplumber.open(pdf_path) as pdf:
         page_numbers = contents_page_numbers(pdf.pages[0])
         entries = [(f"Article starting on page {number}", number) for number in page_numbers]
-        offset = infer_offset(pdf, entries)
+        texts = pdf_page_texts(pdf_path)
+        offset = infer_offset(texts)
         valid = [(title, page) for title, page in entries if min_page <= page <= len(pdf.pages) + offset]
         if not valid:
             raise RuntimeError("No contents entries found. Export a selectable-text PDF or edit manifest.csv manually.")
 
         rows = []
-        all_page_text = []
-        for page in pdf.pages:
-            text = strip_qr_noise(clean_text(page.extract_text() or ""))
-            if text:
-                all_page_text.append(text)
+        all_page_text = [text for text in (strip_qr_noise(clean_text(t)) for t in texts) if text]
         if config.get("include_full_magazine", False):
             full_file = articles_dir / "000-august-full-magazine.txt"
             full_file.write_text("\n\n".join(all_page_text), encoding="utf-8")
@@ -238,7 +248,7 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
             end_idx = min(len(pdf.pages) - 1, page_number_to_pdf_index(next_printed, offset) - 1)
             if end_idx < start_idx:
                 end_idx = start_idx
-            page_texts = [strip_qr_noise(clean_text(pdf.pages[p].extract_text() or "")) for p in range(start_idx, end_idx + 1)]
+            page_texts = [strip_qr_noise(clean_text(texts[p])) for p in range(start_idx, end_idx + 1)]
             body = "\n\n".join(text for text in page_texts if text)
             title = title_overrides.get(printed_start, title_from_page(pdf.pages[start_idx], toc_title))
             slug = slugify(title)
@@ -421,20 +431,23 @@ def cues_to_srt(chunk_cues: list[list]) -> str:
 
 
 def split_narration(text: str, limit: int = 4500) -> list[str]:
-    paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
+    """Pack whole sentences into chunks of at most `limit` characters (long sentences are word-wrapped)."""
+    sentences: list[str] = []
+    for paragraph in (part.strip() for part in text.split("\n\n") if part.strip()):
+        for sentence in re.split(r"(?<=[.!?\u0964])\s+", paragraph):
+            sentences.extend(textwrap.wrap(sentence, width=limit, break_long_words=False, break_on_hyphens=False) or [sentence])
+        sentences[-1] += "\n\n"
     chunks: list[str] = []
     current = ""
-    for paragraph in paragraphs:
-        pieces = textwrap.wrap(paragraph, width=limit, break_long_words=False, break_on_hyphens=False) or [paragraph]
-        for piece in pieces:
-            candidate = f"{current}\n\n{piece}".strip()
-            if current and len(candidate) > limit:
-                chunks.append(current)
-                current = piece
-            else:
-                current = candidate
-    if current:
-        chunks.append(current)
+    for sentence in sentences:
+        candidate = f"{current} {sentence}" if current and not current.endswith("\n\n") else f"{current}{sentence}"
+        if current and len(candidate.strip()) > limit:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = candidate
+    if current.strip():
+        chunks.append(current.strip())
     return chunks
 
 

@@ -14,6 +14,7 @@ import pdfplumber
 from main import (
     create_links_template,
     find_qr_placeholder_pages,
+    pdf_page_texts,
     extract_articles,
     load_config,
     make_qr_codes,
@@ -61,8 +62,7 @@ def detect_qr_pdf_pages(pdf_path: Path, resolution: int = 96) -> list[int]:
     is only used when no placeholder text exists.
     """
     try:
-        with pdfplumber.open(pdf_path) as pdf:
-            placeholders = find_qr_placeholder_pages(pdf)
+        placeholders = find_qr_placeholder_pages(pdf_page_texts(pdf_path))
     except Exception:
         placeholders = []
     if placeholders:
