@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -369,21 +370,54 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
     return review
 
 
-async def synthesize_one(text: str, voice: str, output: Path, rate: str = "+0%") -> None:
+async def synthesize_one(text: str, voice: str, output: Path, rate: str = "+0%") -> list:
+    """Synthesize one chunk and return its subtitle cues from the same request."""
     import edge_tts
     last_error: Exception | None = None
     for attempt in range(3):
         try:
             output.unlink(missing_ok=True)
-            communicate = edge_tts.Communicate(text, voice, rate=rate)
-            await communicate.save(str(output))
+            submaker = edge_tts.SubMaker()
+            with output.open("wb") as stream:
+                async for message in edge_tts.Communicate(text, voice, rate=rate).stream():
+                    if message["type"] == "audio":
+                        stream.write(message["data"])
+                    elif message["type"] in ("SentenceBoundary", "WordBoundary"):
+                        submaker.feed(message)
             if output.exists() and output.stat().st_size > 1024:
-                return
+                return list(submaker.cues)
         except Exception as error:
             last_error = error
         if attempt < 2:
             await asyncio.sleep(1.5 * (attempt + 1))
-    raise RuntimeError(f"English voice generation failed after 3 attempts: {last_error}")
+    raise RuntimeError(f"Voice generation failed after 3 attempts: {last_error}")
+
+
+async def synthesize_chunks(chunks: list[str], voice: str, rate: str, chunk_files: list[Path], limit: int = 4) -> list[list]:
+    gate = asyncio.Semaphore(limit)
+
+    async def one(chunk: str, path: Path) -> list:
+        async with gate:
+            return await synthesize_one(chunk, voice, path, rate)
+
+    return list(await asyncio.gather(*(one(c, p) for c, p in zip(chunks, chunk_files))))
+
+
+def cues_to_srt(chunk_cues: list[list]) -> str:
+    def stamp(seconds: float) -> str:
+        total_ms = int(seconds * 1000)
+        return f"{total_ms // 3600000:02d}:{total_ms // 60000 % 60:02d}:{total_ms // 1000 % 60:02d},{total_ms % 1000:03d}"
+
+    lines, index, offset = [], 1, 0.0
+    for cues in chunk_cues:
+        if not cues:
+            continue
+        for cue in cues:
+            start, end = cue.start.total_seconds() + offset, cue.end.total_seconds() + offset
+            lines += [str(index), f"{stamp(start)} --> {stamp(end)}", cue.content, ""]
+            index += 1
+        offset += cues[-1].end.total_seconds() + 0.1
+    return "\n".join(lines)
 
 
 def split_narration(text: str, limit: int = 4500) -> list[str]:
@@ -415,7 +449,8 @@ def _narrate_row(row: dict, work_dir: Path, config: dict, audio_dir: Path) -> Pa
             raise FileNotFoundError(f"Run metadata first: {script_path}")
     output = audio_dir / f"{mslug}.mp3"
     reuse = config.get("performance", {}).get("reuse_completed_files", True)
-    if reuse and output.exists() and output.stat().st_size > 4096 and output.stat().st_mtime >= script_path.stat().st_mtime:
+    srt = work_dir / "captions" / f"{mslug}.srt"
+    if reuse and srt.exists() and output.exists() and output.stat().st_size > 4096 and output.stat().st_mtime >= script_path.stat().st_mtime:
         return output
     script_text = script_path.read_text(encoding="utf-8")
     script_lang = detect_language(script_text)
@@ -424,12 +459,11 @@ def _narrate_row(row: dict, work_dir: Path, config: dict, audio_dir: Path) -> Pa
     chunks = split_narration(script_text)
     chunk_dir = audio_dir / ".chunks" / row["id"]
     chunk_dir.mkdir(parents=True, exist_ok=True)
-    chunk_files = []
-    for index, chunk in enumerate(chunks):
-        chunk_file = chunk_dir / f"{index:04d}.mp3"
-        if not (reuse and chunk_file.exists() and chunk_file.stat().st_size > 1024):
-            asyncio.run(synthesize_one(chunk, voice, chunk_file, rate))
-        chunk_files.append(chunk_file)
+    chunk_files = [chunk_dir / f"{index:04d}.mp3" for index in range(len(chunks))]
+    chunk_cues = asyncio.run(synthesize_chunks(chunks, voice, rate, chunk_files))
+    captions_dir = work_dir / "captions"
+    captions_dir.mkdir(exist_ok=True)
+    (captions_dir / f"{mslug}.srt").write_text(cues_to_srt(chunk_cues), encoding="utf-8")
     if len(chunk_files) == 1:
         shutil.copyfile(chunk_files[0], output)
     else:
@@ -663,16 +697,14 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
     return video
 
 
-def render_videos(manifest: Path, work_dir: Path, config: dict) -> None:
+def _video_context(work_dir: Path):
     cards = work_dir / "cards"; cards.mkdir(exist_ok=True)
     videos = work_dir / "videos"; videos.mkdir(exist_ok=True)
-    ffmpeg = ffmpeg_executable()
     pdf_path = None
     extraction_file = work_dir / "extraction.json"
     if extraction_file.exists():
         try:
-            extraction_data = json.loads(extraction_file.read_text(encoding="utf-8"))
-            candidate = Path(extraction_data.get("source_pdf", ""))
+            candidate = Path(json.loads(extraction_file.read_text(encoding="utf-8")).get("source_pdf", ""))
             if candidate.exists():
                 pdf_path = candidate
         except Exception:
@@ -682,12 +714,35 @@ def render_videos(manifest: Path, work_dir: Path, config: dict) -> None:
             if p.exists():
                 pdf_path = p
                 break
+    return cards, videos, ffmpeg_executable(), pdf_path
 
+
+def render_videos(manifest: Path, work_dir: Path, config: dict) -> None:
+    cards, videos, ffmpeg, pdf_path = _video_context(work_dir)
     rows = list(iter_manifest(manifest))
     workers = max(1, min(int(config.get("performance", {}).get("video_workers", 2)), len(rows)))
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="sampada-video") as executor:
         futures = [executor.submit(_render_video_row, row, work_dir, config, cards, videos, ffmpeg, pdf_path) for row in rows]
         for future in as_completed(futures):
+            future.result()
+
+
+def produce_media(manifest: Path, work_dir: Path, config: dict) -> None:
+    """Narrate and render each article end to end, so video encoding overlaps with other articles' narration."""
+    audio_dir = work_dir / "audio"; audio_dir.mkdir(exist_ok=True)
+    cards, videos, ffmpeg, pdf_path = _video_context(work_dir)
+    performance = config.get("performance", {})
+    rows = list(iter_manifest(manifest))
+    workers = max(1, min(int(performance.get("audio_workers", 8)), len(rows)))
+    encode_gate = threading.BoundedSemaphore(max(1, int(performance.get("video_workers", 4))))
+
+    def job(row: dict) -> None:
+        _narrate_row(row, work_dir, config, audio_dir)
+        with encode_gate:
+            _render_video_row(row, work_dir, config, cards, videos, ffmpeg, pdf_path)
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="sampada-media") as executor:
+        for future in as_completed([executor.submit(job, row) for row in rows]):
             future.result()
 
 

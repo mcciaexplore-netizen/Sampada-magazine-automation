@@ -29,6 +29,7 @@ from main import (
     make_qr_codes,
     metadata_and_script,
     narrate,
+    produce_media,
     render_videos,
 )
 
@@ -256,9 +257,8 @@ def automate(payload: ReviewPayload) -> dict:
     issue_dir, manifest, state, drive_paths = prepare_selection(payload)
     config = load_config(CONFIG_PATH)
     metadata_csv = metadata_and_script(manifest, issue_dir, config)
-    narrate(manifest, issue_dir, config)
+    produce_media(manifest, issue_dir, config)
     warning = make_captions(issue_dir, config)
-    render_videos(manifest, issue_dir, config)
     output_xlsx = write_excel(metadata_csv, state, drive_paths)
     copy_outputs(issue_dir, drive_paths)
     message = "Audio, videos, captions and Excel plan are ready in the output folder."

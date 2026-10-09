@@ -110,6 +110,8 @@ def process_article(row: dict, work_dir: Path, captions_dir: Path, config: dict)
             print(f"Script missing: {script_path}")
             return
     srt_output = captions_dir / f"{mslug}.srt"
+    if srt_output.exists() and srt_output.stat().st_mtime >= script_path.stat().st_mtime:
+        return
     script_text = script_path.read_text(encoding="utf-8")
     lang = detect_language(script_text)
     voice = config.get("voices", {}).get(lang) or config.get("voices", {}).get(row.get("language", "en"), "en-IN-NeerjaNeural")

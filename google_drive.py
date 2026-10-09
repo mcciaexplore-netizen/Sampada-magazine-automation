@@ -16,6 +16,7 @@ import calendar
 import csv
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -60,10 +61,21 @@ def _credentials():
     return creds
 
 
+_creds_cache = None
+
+
+def _drive_service():
+    from googleapiclient.discovery import build
+    global _creds_cache
+    if _creds_cache is None:
+        _creds_cache = _credentials()
+    return build("drive", "v3", credentials=_creds_cache, cache_discovery=False)
+
+
 def _services():
     from googleapiclient.discovery import build
-    creds = _credentials()
-    return build("drive", "v3", credentials=creds, cache_discovery=False), build("sheets", "v4", credentials=creds, cache_discovery=False)
+    drive = _drive_service()
+    return drive, build("sheets", "v4", credentials=_creds_cache, cache_discovery=False)
 
 
 def _q(value: str) -> str:
@@ -130,17 +142,20 @@ def publish_issue(issue_dir: Path, state: dict, metadata_csv: Path) -> dict:
     with metadata_csv.open("r", encoding="utf-8-sig", newline="") as stream:
         metadata = list(csv.DictReader(stream))
 
-    rows = []
-    for item in metadata:
+    def process(item: dict) -> dict:
+        drive = _drive_service()  # googleapiclient services are not thread-safe
         stem = Path(item["audio_file"]).stem
         files = {"audio": issue_dir / "audio" / item["audio_file"], "videos": issue_dir / "videos" / item["video_file"],
                  "captions": issue_dir / "captions" / f"{stem}.srt", "qr_codes": issue_dir / "qr_codes" / f"{stem}.png"}
         link = {kind: (_upload(drive, path, subfolders[kind], public) if path.exists() else "") for kind, path in files.items()}
         caption = files["captions"]
-        rows.append({"id": item["id"], "title": item["title"], "language": item.get("language", "en"), "description": item["description"],
-                     "audio_link": link["audio"], "video_link": link["videos"], "caption_link": link["captions"],
-                     "caption_text": caption.read_text(encoding="utf-8") if caption.exists() else "",
-                     "youtube_url": urls.get(item["id"], ""), "qr_link": link["qr_codes"]})
+        return {"id": item["id"], "title": item["title"], "language": item.get("language", "en"), "description": item["description"],
+                "audio_link": link["audio"], "video_link": link["videos"], "caption_link": link["captions"],
+                "caption_text": caption.read_text(encoding="utf-8") if caption.exists() else "",
+                "youtube_url": urls.get(item["id"], ""), "qr_link": link["qr_codes"]}
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        rows = list(executor.map(process, metadata))
 
     google_state_path = issue_dir / "google_state.json"
     google_state = json.loads(google_state_path.read_text(encoding="utf-8")) if google_state_path.exists() else {}

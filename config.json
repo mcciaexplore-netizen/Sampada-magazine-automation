@@ -20,7 +20,7 @@
     "accent": "#E8A23B"
   },
   "performance": {
-    "audio_workers": 4,
+    "audio_workers": 8,
     "video_workers": 4,
     "reuse_completed_files": true
   },
