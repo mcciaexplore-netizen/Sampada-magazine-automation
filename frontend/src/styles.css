@@ -490,3 +490,10 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.progress-card { margin: 12px 0; padding: 14px 18px; border: 1px solid #c9dbe8; border-radius: 12px; background: #f3f8fc; }
+.progress-label { font-size: 14px; font-weight: 600; color: #0e5f9f; margin-bottom: 8px; }
+.progress-track { height: 10px; border-radius: 999px; background: #dbe7f0; overflow: hidden; position: relative; }
+.progress-fill { height: 100%; border-radius: 999px; background: #159447; transition: width 0.2s ease; }
+.progress-track.indeterminate .progress-fill { width: 40% !important; position: absolute; animation: progress-slide 1.2s ease-in-out infinite; }
+@keyframes progress-slide { 0% { left: -40%; } 100% { left: 100%; } }

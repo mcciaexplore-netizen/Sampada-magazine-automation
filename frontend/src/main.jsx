@@ -24,6 +24,27 @@ async function api(path, options = {}) {
   }
 }
 
+// XMLHttpRequest instead of fetch so the browser can report upload progress.
+function uploadWithProgress(path, body, onProgress) {
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress({ phase: "upload", loaded: event.loaded, total: event.total }); };
+    xhr.upload.onload = () => onProgress({ phase: "analyze" });
+    xhr.onerror = () => reject(new Error("Cannot reach the Sampada backend. Start it (uvicorn backend_api:app) or, on Render, wait 30-45 seconds for it to wake up, then retry."));
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.detail || data.message || `Request failed (${xhr.status})`));
+    };
+    xhr.send(body);
+  });
+}
+
+const mb = (bytes) => (bytes / 1048576).toFixed(1);
+
 function App() {
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(9);
@@ -34,6 +55,7 @@ function App() {
   const [links, setLinks] = useState([]);
   const [stats, setStats] = useState({ selected: 0, audio: 0, videos: 0, qr: 0 });
   const [busy, setBusy] = useState("");
+  const [progress, setProgress] = useState(null);
   const [notice, setNotice] = useState(null);
   const [scriptsReady, setScriptsReady] = useState(false);
   const [folder, setFolder] = useState("");
@@ -68,7 +90,10 @@ function App() {
     if (!file) throw new Error("Choose a Sampada PDF first");
     const body = new FormData();
     body.append("file", file); body.append("year", year); body.append("month", month); body.append("drive_root", driveRoot);
-    const data = await api("/api/analyze", { method: "POST", body });
+    setProgress({ phase: "upload", loaded: 0, total: file.size });
+    let data;
+    try { data = await uploadWithProgress("/api/analyze", body, setProgress); }
+    finally { setProgress(null); }
     setIssueKey(data.issue_key); setRows(data.rows); setStats(data.stats); setScriptsReady(false); setFolder(data.monthly_folder);
     setGoogleLinks({ sheet_url: "", drive_folder_url: "" });
     setNotice({ type: data.fallback ? "warning" : "success", text: data.fallback ? "No 'Scan the QR code to listen…' box or QR symbol was found in this PDF. Tick the articles you want manually." : `Found ${data.stats.selected} articles that end with a QR code.` });
@@ -165,6 +190,14 @@ function App() {
       <button className="primary" disabled={!file || busy} onClick={analyze}><Play size={17}/> Analyze edition</button>
     </section>
 
+    {progress && <div className="progress-card">
+      <div className="progress-label">{progress.phase === "upload"
+        ? `Uploading PDF… ${mb(progress.loaded)} / ${mb(progress.total)} MB (${Math.round(progress.loaded / progress.total * 100)}%)`
+        : "Upload complete. Reading pages and finding QR articles…"}</div>
+      <div className={`progress-track ${progress.phase === "analyze" ? "indeterminate" : ""}`}>
+        <div className="progress-fill" style={{ width: progress.phase === "upload" ? `${Math.round(progress.loaded / progress.total * 100)}%` : "100%" }}/>
+      </div>
+    </div>}
     {busy && <div className="busy"><LoaderCircle className="spin" size={19}/>{busy}{busy.includes("audio") && ` ${stats.audio} / ${stats.selected}`}{busy.includes("videos") && ` ${stats.videos} / ${stats.selected}`}</div>}
     {notice && <div className={`notice ${notice.type}`}>{notice.text}</div>}
 
