@@ -4,7 +4,8 @@ Authentication (pick one):
   * OAuth desktop client (personal Google account): save the client JSON as ``google_credentials.json``
     next to this file (or point GOOGLE_OAUTH_CLIENT_FILE at it). A browser opens once to sign in;
     the token is cached in ``google_token.json``.
-  * Service account: set GOOGLE_SERVICE_ACCOUNT_JSON to the key file path (or the JSON itself) and
+  * Hosted (Render): set GOOGLE_OAUTH_TOKEN_JSON to the contents of google_token.json created by a local sign-in.
+  * Service account (needs a Shared Drive; service accounts have no storage of their own): set GOOGLE_SERVICE_ACCOUNT_JSON to the key file path (or the JSON itself) and
     set GOOGLE_DRIVE_FOLDER_ID to a Shared Drive / folder the service account can write to.
 
 Optional: GOOGLE_DRIVE_FOLDER_ID (parent folder; default is My Drive root),
@@ -31,12 +32,19 @@ SETUP_HELP = (
 )
 
 
+def _config_folder_id() -> str:
+    try:
+        return json.loads((ROOT / "config.json").read_text(encoding="utf-8")).get("google_drive_folder_id", "")
+    except Exception:
+        return ""
+
+
 def _oauth_client_file() -> Path:
     return Path(os.environ.get("GOOGLE_OAUTH_CLIENT_FILE") or ROOT / "google_credentials.json")
 
 
 def is_configured() -> bool:
-    return bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")) or _oauth_client_file().exists() or (ROOT / "google_token.json").exists()
+    return bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_OAUTH_TOKEN_JSON")) or _oauth_client_file().exists() or (ROOT / "google_token.json").exists()
 
 
 def _credentials():
@@ -49,6 +57,12 @@ def _credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     token_path = ROOT / "google_token.json"
+    token_env = os.environ.get("GOOGLE_OAUTH_TOKEN_JSON", "").strip()
+    if token_env:  # headless hosting: contents of google_token.json from a local sign-in
+        creds = Credentials.from_authorized_user_info(json.loads(token_env), SCOPES)
+        if not creds.valid:
+            creds.refresh(Request())
+        return creds
     creds = Credentials.from_authorized_user_file(str(token_path), SCOPES) if token_path.exists() else None
     if creds and creds.valid:
         return creds
@@ -126,7 +140,7 @@ def publish_issue(issue_dir: Path, state: dict, metadata_csv: Path) -> dict:
     """Upload audio, video, captions and QR codes, then (re)write the Sheet. Returns links."""
     drive, sheets = _services()
     public = os.environ.get("GOOGLE_DRIVE_PUBLIC") == "1"
-    parent = os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or "root"
+    parent = os.environ.get("GOOGLE_DRIVE_FOLDER_ID") or _config_folder_id() or "root"
     year, month = int(state["year"]), int(state["month"])
     for name in ("Sampada", str(year), f"{month:02d} - {calendar.month_name[month]}"):
         parent = _folder(drive, name, parent)
