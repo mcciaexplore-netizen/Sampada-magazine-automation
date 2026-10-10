@@ -88,10 +88,15 @@ function App() {
   const [scriptsReady, setScriptsReady] = useState(false);
   const [folder, setFolder] = useState("");
   const [excelFile, setExcelFile] = useState("");
-  const [google, setGoogle] = useState({ configured: false, help: "" });
+  const [google, setGoogle] = useState({ configured: null, help: "" });
   const [googleLinks, setGoogleLinks] = useState({ sheet_url: "", drive_folder_url: "" });
 
-  useEffect(() => { api("/api/google/status").then(setGoogle).catch(() => {}); }, []);
+  useEffect(() => {
+    let stop = false, timer;
+    const check = () => api("/api/google/status").then(data => { if (!stop) setGoogle(data); }).catch(() => { if (!stop) timer = setTimeout(check, 3000); });
+    check();
+    return () => { stop = true; clearTimeout(timer); };
+  }, []);
   const keepGoogleLinks = (data) => { if (data.sheet_url) setGoogleLinks({ sheet_url: data.sheet_url, drive_folder_url: data.drive_folder_url }); };
 
   const selectedCount = useMemo(() => rows.filter(row => String(row.selected).toLowerCase() === "yes" || row.selected === true).length, [rows]);
@@ -286,7 +291,7 @@ function App() {
         </div>
       </section>
 
-      {!google.configured && <p className="folder"><span>Google Drive / Sheet upload is off: {google.help}</span></p>}
+      {google.configured === false && <p className="folder"><span>Google Drive / Sheet upload is off: {google.help}</span></p>}
       {googleLinks.sheet_url && <p className="folder"><Sheet size={15}/><span>Google Sheet: <a href={googleLinks.sheet_url} target="_blank" rel="noreferrer">{googleLinks.sheet_url}</a> · Drive folder: <a href={googleLinks.drive_folder_url} target="_blank" rel="noreferrer">open</a></span></p>}
       {excelFile && <p className="folder"><Sheet size={15}/><span>Excel workbook saved to: {excelFile}</span></p>}
 

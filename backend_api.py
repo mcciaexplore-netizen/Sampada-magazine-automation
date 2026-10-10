@@ -124,8 +124,6 @@ def normalise_rows(rows: list[dict]) -> pd.DataFrame:
     if frame.empty or "selected" not in frame.columns:
         raise HTTPException(400, "Select at least one article")
     frame["selected"] = frame["selected"].map(lambda value: "yes" if str(value).lower() in {"yes", "true", "1"} else "no")
-    if "id" in frame.columns:
-        frame.loc[frame["id"].astype(str).str.lower().eq("full"), "selected"] = "no"
     if not frame["selected"].eq("yes").any():
         raise HTTPException(400, "Select at least one article")
     if "language" not in frame.columns:

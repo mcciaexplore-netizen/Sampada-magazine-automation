@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import calendar
+
 import argparse
 import asyncio
 import csv
@@ -81,6 +83,45 @@ def load_config(path: Path) -> dict:
 def issue_overrides(config: dict, issue_key: str) -> dict:
     """Per-issue manual overrides (titles, video titles, categories), keyed by YYYY-MM."""
     return config.get("issue_overrides", {}).get(issue_key, {})
+
+
+def full_magazine_title(issue_key: str) -> str:
+    try:
+        year, month = (int(part) for part in issue_key.split("-")[:2])
+        return f"{calendar.month_name[month]} {year} Issue Summary"
+    except (ValueError, IndexError):
+        return "Issue Summary"
+
+
+_STOP = set("the a an and or of to in on for with is are was were be by as at it its this that from has have had will not but their they which who into more also can than".split())
+
+
+def summarize_article(text: str, count: int = 2) -> str:
+    sentences = [x.strip() for x in re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text))]
+    sentences = [x for x in sentences if 50 <= len(x) <= 320 and sum(c.isdigit() for c in x) < 12 and "|" not in x and "@" not in x]
+    if len(sentences) <= count:
+        return " ".join(sentences)
+    freq = Counter(w for x in sentences for w in re.findall(r"[a-z']{3,}", x.lower()) if w not in _STOP)
+    def score(i: int) -> float:
+        words = [w for w in re.findall(r"[a-z']{3,}", sentences[i].lower()) if w not in _STOP]
+        return sum(freq[w] for w in words) / (len(words) ** 0.5 or 1) + (3 if i == 0 else 0)
+    best = sorted(sorted(range(len(sentences)), key=score, reverse=True)[:count])
+    return " ".join(sentences[i] for i in best)
+
+
+def build_issue_summary(issue_key: str, articles: list[tuple[str, str]]) -> str:
+    try:
+        year, month = (int(part) for part in issue_key.split("-")[:2])
+        label = f"{calendar.month_name[month]} {year}"
+    except (ValueError, IndexError):
+        label = "this month"
+    parts = [f"Welcome to the {label} issue of Sampada, from MCCIA. Here is a summary of this month's edition."]
+    for title, body in articles:
+        summary = summarize_article(body)
+        if summary and not title.startswith("Article starting"):
+            parts.append(f"{title.rstrip('.')}. {summary}")
+    parts.append("That was the Sampada summary. Read the full articles in the magazine.")
+    return "\n\n".join(parts)
 
 
 def detect_language(text: str) -> str:
@@ -231,15 +272,7 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
 
         rows = []
         all_page_text = [text for text in (strip_qr_noise(clean_text(t)) for t in texts) if text]
-        if config.get("include_full_magazine", False):
-            full_file = articles_dir / "000-august-full-magazine.txt"
-            full_file.write_text("\n\n".join(all_page_text), encoding="utf-8")
-            rows.append({
-                "id": "full", "selected": "yes", "printed_start_page": 1,
-                "printed_end_page": len(pdf.pages) + offset, "pdf_start_page": 1,
-                "pdf_end_page": len(pdf.pages), "language": "en",
-                "title": "August Full Magazine", "article_file": str(full_file.relative_to(output_dir)),
-            })
+        full_row = None
         overrides = issue_overrides(config, output_dir.name)
         title_overrides = {int(key): value for key, value in overrides.get("article_titles", {}).items()}
         for i, (toc_title, printed_start) in enumerate(valid):
@@ -265,6 +298,18 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
                 "title": title,
                 "article_file": str(article_file.relative_to(output_dir)),
             })
+
+    if config.get("include_full_magazine", False):
+        summaries = [(row["title"], (output_dir / row["article_file"]).read_text(encoding="utf-8"))
+                     for row in rows if row["language"] == "en"]
+        full_file = articles_dir / "000-issue-summary.txt"
+        full_file.write_text(build_issue_summary(output_dir.name, summaries), encoding="utf-8")
+        rows.insert(0, {
+            "id": "full", "selected": "no", "printed_start_page": 1,
+            "printed_end_page": len(pdf.pages) + offset, "pdf_start_page": 1,
+            "pdf_end_page": len(pdf.pages), "language": "en",
+            "title": full_magazine_title(output_dir.name), "article_file": str(full_file.relative_to(output_dir)),
+        })
 
     manifest = output_dir / "manifest.csv"
     with manifest.open("w", newline="", encoding="utf-8-sig") as stream:

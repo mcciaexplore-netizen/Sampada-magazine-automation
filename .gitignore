@@ -38,3 +38,5 @@ Thumbs.db
 # Google credentials
 google_credentials.json
 google_token.json
+google_credentials*.json
+client_secret_*.json

@@ -4,7 +4,7 @@
   "default_language": "en-IN",
   "audio_language": "en",
   "speech_rate": "+10%",
-  "include_full_magazine": false,
+  "include_full_magazine": true,
   "voices": {
     "en": "en-IN-NeerjaNeural",
     "mr": "mr-IN-AarohiNeural",
