@@ -1,8 +1,36 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { CheckSquare, FileText, FolderOpen, Headphones, LoaderCircle, Play, QrCode, Sheet, Sparkles, Square, Upload, Video } from "lucide-react";
 import "./styles.css";
 import mcciaLogo from "./assets/mccia-logo.png";
+
+function CountUp({ value }) {
+  const ref = useRef(null);
+  const [shown, setShown] = useState(0);
+  const done = useRef(false);
+  const latest = useRef(value);
+  latest.current = value;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || done.current) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const io = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      io.disconnect();
+      if (reduce) { done.current = true; setShown(latest.current); return; }
+      const start = performance.now();
+      const tick = (now) => {
+        const p = Math.min((now - start) / 1800, 1);
+        setShown(Math.round(latest.current * (1 - Math.pow(1 - p, 3))));
+        if (p < 1) requestAnimationFrame(tick); else done.current = true;
+      };
+      requestAnimationFrame(tick);
+    }, { threshold: 0.1 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return <span ref={ref}>{(done.current ? value : shown).toLocaleString("en-IN")}</span>;
+}
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -203,7 +231,7 @@ function App() {
 
     {issueKey && <>
       <section className="metrics">
-        {[['Selected', selectedCount, null], ['Audio', stats.audio, stats.selected], ['Videos', stats.videos, stats.selected], ['QR codes', stats.qr, stats.selected]].map(([label, value, total]) => <div className="metric" key={label}><strong>{value}{total !== null && <small> / {total}</small>}</strong><span>{label}</span></div>)}
+        {[['Selected', selectedCount, null], ['Audio', stats.audio, stats.selected], ['Videos', stats.videos, stats.selected], ['QR codes', stats.qr, stats.selected]].map(([label, value, total], idx) => <div className="metric" key={label} style={{ "--i": idx }}><strong><CountUp value={value}/>{total !== null && <small> / {total}</small>}</strong><span>{label}</span></div>)}
       </section>
 
       <section className="card review">
