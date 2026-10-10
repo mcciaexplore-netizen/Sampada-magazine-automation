@@ -162,14 +162,14 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
     # Sheet 1: Plan
     ws_plan = wb.create_sheet(title="YouTube Plan")
     ws_plan.views.sheetView[0].showGridLines = True
-    ws_plan.merge_cells("A1:K1")
+    ws_plan.merge_cells("A1:H1")
     ws_plan["A1"] = f"Sampada Magazine – {calendar.month_name[month]} {year} YouTube Plan"
     ws_plan["A1"].font = TITLE_FONT
     ws_plan["A1"].fill = HEADER_FILL
     ws_plan["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws_plan.row_dimensions[1].height = 40
 
-    headers = ["ID", "Title", "Language", "Printed Pages", "YouTube URL", "Keywords", "Description", "Video File", "Audio File", "Caption File (.srt)", "Captions Preview"]
+    headers = ["Sr No", "Name of Article", "Audio  Link", "Canva Video Link", "Youtube Link", "QR Code Link", "Description", "Keyword"]
     ws_plan.append([])
     ws_plan.append(headers)
     ws_plan.row_dimensions[3].height = 28
@@ -180,30 +180,11 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
         c.alignment = Alignment(horizontal="center" if col_idx in (1, 3, 4) else "left", vertical="center")
 
     for r_idx, r in enumerate(meta_rows, start=4):
-        m = manifest_map.get(r["id"], {})
-        printed = f"{m.get('printed_start_page', '')} - {m.get('printed_end_page', '')}"
-        
-        cap_file = r.get("caption_file", "")
-        cap_path = None
-        if cap_file and (work_dir / cap_file).exists():
-            cap_path = work_dir / cap_file
-        else:
-            candidates = [
-                work_dir / "captions" / f"{Path(r['script_file']).stem}.srt",
-                work_dir / f"captions/{r['id']}.srt",
-            ]
-            for cand in candidates:
-                if cand.exists():
-                    cap_path = cand
-                    cap_file = str(cand.relative_to(work_dir))
-                    break
-        if not cap_file:
-            cap_file = f"captions/{Path(r.get('script_file', 'script')).stem}.srt"
-        cap_prev = "\n".join(cap_path.read_text(encoding="utf-8").splitlines()[:12]) if cap_path and cap_path.exists() else ""
+        stem = Path(r.get("audio_file", "")).stem
+        qr_name = f"{stem}.png" if stem and (work_dir / "qr_codes" / f"{stem}.png").exists() else ""
         vals = [
-            r["id"], r["title"], "Marathi" if r.get("language") == "mr" else "English",
-            printed, r.get("youtube_url") or link_map.get(r["id"], ""), r.get("keywords", ""), r.get("description", ""),
-            r.get("video_file", ""), r.get("audio_file", ""), cap_file, cap_prev
+            r_idx - 3, r["title"], r.get("audio_file", ""), r.get("video_file", ""),
+            r.get("youtube_url") or link_map.get(r["id"], ""), qr_name, r.get("description", ""), r.get("keyword", ""),
         ]
         ws_plan.append(vals)
         ws_plan.row_dimensions[r_idx].height = 65
@@ -213,9 +194,9 @@ def build_excel(metadata_csv: Path, output_xlsx: Path, month: int, year: int) ->
             c.border = THIN_BORDER
             if r_idx % 2 == 0:
                 c.fill = ZEBRA_FILL
-            if col_idx in (1, 3, 4):
+            if col_idx == 1:
                 c.alignment = Alignment(horizontal="center", vertical="center")
-            elif col_idx in (7, 11):
+            elif col_idx == 7:
                 c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
             else:
                 c.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)

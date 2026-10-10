@@ -88,9 +88,9 @@ def issue_overrides(config: dict, issue_key: str) -> dict:
 def full_magazine_title(issue_key: str) -> str:
     try:
         year, month = (int(part) for part in issue_key.split("-")[:2])
-        return f"{calendar.month_name[month]} {year} Issue Summary"
+        return f"{calendar.month_name[month]} Full Magazine"
     except (ValueError, IndexError):
-        return "Issue Summary"
+        return "Full Magazine"
 
 
 _STOP = set("the a an and or of to in on for with is are was were be by as at it its this that from has have had will not but their they which who into more also can than".split())
@@ -122,6 +122,14 @@ def build_issue_summary(issue_key: str, articles: list[tuple[str, str]]) -> str:
             parts.append(f"{title.rstrip('.')}. {summary}")
     parts.append("That was the Sampada summary. Read the full articles in the magazine.")
     return "\n\n".join(parts)
+
+
+def full_issue_slug(issue_key: str) -> str:
+    try:
+        year, month = (int(part) for part in issue_key.split("-")[:2])
+        return f"Sampada-Magazine-{calendar.month_name[month]}-{year}-Full-Issue-Summary"
+    except (ValueError, IndexError):
+        return "Sampada-Magazine-Full-Issue-Summary"
 
 
 def detect_language(text: str) -> str:
@@ -326,8 +334,6 @@ def extract_articles(pdf_path: Path, output_dir: Path, config: dict, min_page: i
 def iter_manifest(manifest: Path) -> Iterable[dict]:
     with manifest.open("r", encoding="utf-8-sig", newline="") as stream:
         for row in csv.DictReader(stream):
-            if row.get("id", "").strip().lower() == "full":
-                continue
             if row.get("selected", "yes").strip().lower() in {"yes", "y", "1", "true"}:
                 yield row
 
@@ -402,7 +408,10 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
             hook = f"🎧 Tune in to discover the key insights, strategies, and growth opportunities shaping the future of this sector.\n\n📖 Read in {config['magazine_name']} by {config['publisher']}."
 
         description = f"{lead}\n\n{hook}\n\n" + " ".join(hashtags)
-        mslug = media_slug(title)
+        mslug = full_issue_slug(work_dir.name) if row["id"] == "full" else media_slug(title)
+        category = issue_overrides(config, work_dir.name).get("article_categories", {}).get(row["id"], "")
+        if row["id"] == "full":
+            category = "Full Issue"
         script_path = scripts_dir / f"{mslug}.txt"
         meta_path = metadata_dir / f"{mslug}.json"
         if not script_path.exists() or script_path.read_text(encoding="utf-8") != script:
@@ -414,7 +423,7 @@ def metadata_and_script(manifest: Path, work_dir: Path, config: dict) -> Path:
             "audio_file": f"{mslug}.mp3",
             "video_file": f"{mslug}.mp4",
             "youtube_url": "", "description": description,
-            "keyword": " ".join(word.title() for word in keywords[:2]),
+            "keyword": category or " ".join(word.title() for word in keywords[:2]),
             "language": row["language"], "keywords": ", ".join(keywords),
             "script_file": str(script_path.relative_to(work_dir)),
         })
@@ -733,7 +742,7 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
         return video
     overrides = issue_overrides(config, work_dir.name)
     display_title = overrides.get("title_overrides", {}).get(row["id"], row["title"])
-    category = overrides.get("article_categories", {}).get(row["id"], "")
+    category = overrides.get("article_categories", {}).get(row["id"], "") or _keyword_badge(work_dir, row["id"])
     title_card(
         display_title,
         f"{config['magazine_name']} | {config['publisher']}",
@@ -753,6 +762,21 @@ def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, vide
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return video
+
+
+def _keyword_badge(work_dir: Path, article_id: str) -> str:
+    """Badge text for a video card: the article's keyword from the metadata CSV."""
+    metadata = work_dir / "youtube_metadata.csv"
+    if not metadata.exists():
+        return ""
+    try:
+        with metadata.open("r", encoding="utf-8-sig", newline="") as stream:
+            for entry in csv.DictReader(stream):
+                if entry.get("id") == article_id:
+                    return (entry.get("keyword") or "").strip()
+    except OSError:
+        pass
+    return ""
 
 
 def _video_context(work_dir: Path):

@@ -127,12 +127,17 @@ def _upload(drive, path: Path, parent: str, public: bool) -> str:
 
 
 def _sheet_values(rows: list[dict]) -> list[list[str]]:
-    header = ["ID", "Article", "Language", "Audio (Drive link)", "Video (Drive link)", "YouTube title", "YouTube description",
-              "YouTube captions (SRT file)", "YouTube captions (text)", "YouTube link", "QR code (Drive link)"]
+    header = ["Sr No", "Name of Article", "Audio  Link", "Canva Video Link", "Youtube Link", "QR Code Link", "Description", "Keyword"]
+
+    def link(url: str, name: str) -> str:
+        if not name:
+            return ""
+        return f'=HYPERLINK("{url}","{name}")' if url else name
+
     values = [header]
-    for row in rows:
-        values.append([row["id"], row["title"], "Marathi" if row["language"] == "mr" else "English", row["audio_link"], row["video_link"],
-                       row["title"], row["description"], row["caption_link"], row["caption_text"][:45000], row["youtube_url"], row["qr_link"]])
+    for number, row in enumerate(rows, start=1):
+        values.append([number, row["title"], link(row["audio_link"], row["audio_file"]), link(row["video_link"], row["video_file"]),
+                       row["youtube_url"], link(row["qr_link"], row["qr_file"]), row["description"], row["keyword"]])
     return values
 
 
@@ -164,6 +169,8 @@ def publish_issue(issue_dir: Path, state: dict, metadata_csv: Path) -> dict:
         link = {kind: (_upload(drive, path, subfolders[kind], public) if path.exists() else "") for kind, path in files.items()}
         caption = files["captions"]
         return {"id": item["id"], "title": item["title"], "language": item.get("language", "en"), "description": item["description"],
+                "audio_file": item["audio_file"], "video_file": item["video_file"], "qr_file": f"{stem}.png" if files["qr_codes"].exists() else "",
+                "keyword": item.get("keyword", ""),
                 "audio_link": link["audio"], "video_link": link["videos"], "caption_link": link["captions"],
                 "caption_text": caption.read_text(encoding="utf-8") if caption.exists() else "",
                 "youtube_url": urls.get(item["id"], ""), "qr_link": link["qr_codes"]}
