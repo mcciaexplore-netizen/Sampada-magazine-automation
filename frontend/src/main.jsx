@@ -60,15 +60,44 @@ function uploadWithProgress(path, body, onProgress) {
     xhr.open("POST", url);
     xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress({ phase: "upload", loaded: event.loaded, total: event.total }); };
     xhr.upload.onload = () => onProgress({ phase: "analyze" });
-    xhr.onerror = () => reject(new Error("Cannot reach the Sampada backend. Start it (uvicorn backend_api:app) or, on Render, wait 30-45 seconds for it to wake up, then retry."));
+    xhr.onerror = () => reject(new Error("Cannot reach the Sampada backend. On Render's free tier, the server sleeps when idle (~45s spin-up time). Please wait a moment and try again."));
     xhr.onload = () => {
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
-      else reject(new Error(data.detail || data.message || `Request failed (${xhr.status})`));
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+      } else if (xhr.status === 502 || xhr.status === 503 || xhr.status === 504) {
+        reject(new Error(`Render backend returned ${xhr.status} (Bad Gateway / Cold Start). The server was likely still spinning up. Please wait 15 seconds and click 'Analyze edition' again.`));
+      } else {
+        reject(new Error(data.detail || data.message || `Request failed (${xhr.status})`));
+      }
     };
     xhr.send(body);
   });
+}
+
+async function ensureBackendReady(onStatus) {
+  const maxAttempts = 12;
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`${API_BASE}/api/health`, {
+        method: "GET",
+        signal: controller.signal,
+        cache: "no-store",
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) return true;
+    } catch {
+      // Backend is still waking up
+    }
+    if (onStatus) {
+      onStatus(`Waking up Render backend (${i * 3}s / ~40s)… Render free tier sleeps when idle.`);
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  return false;
 }
 
 const mb = (bytes) => (bytes / 1048576).toFixed(1);
@@ -90,10 +119,29 @@ function App() {
   const [excelFile, setExcelFile] = useState("");
   const [google, setGoogle] = useState({ configured: null, help: "" });
   const [googleLinks, setGoogleLinks] = useState({ sheet_url: "", drive_folder_url: "" });
+  const [serverStatus, setServerStatus] = useState("checking");
 
   useEffect(() => {
     let stop = false, timer;
-    const check = () => api("/api/google/status").then(data => { if (!stop) setGoogle(data); }).catch(() => { if (!stop) timer = setTimeout(check, 3000); });
+    let attempts = 0;
+    const check = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/health`, { method: "GET", cache: "no-store" });
+        if (res.ok && !stop) {
+          setServerStatus("online");
+          const googleData = await api("/api/google/status").catch(() => null);
+          if (googleData && !stop) setGoogle(googleData);
+          return;
+        }
+      } catch {
+        // backend waking up
+      }
+      attempts++;
+      if (!stop) {
+        setServerStatus(attempts > 15 ? "offline" : "waking");
+        timer = setTimeout(check, 3000);
+      }
+    };
     check();
     return () => { stop = true; clearTimeout(timer); };
   }, []);
@@ -121,6 +169,13 @@ function App() {
 
   const analyze = () => run("Analyzing magazine pages and detecting table of contents…", async () => {
     if (!file) throw new Error("Choose a Sampada PDF first");
+    setBusy("Connecting to backend server…");
+    const ready = await ensureBackendReady((msg) => setBusy(msg));
+    if (!ready) {
+      throw new Error("Render backend is taking longer than 40s to wake up. Please wait 15 seconds and try again.");
+    }
+    setServerStatus("online");
+    setBusy("Analyzing magazine pages and detecting table of contents…");
     const body = new FormData();
     body.append("file", file); body.append("year", year); body.append("month", month); body.append("drive_root", driveRoot);
     setProgress({ phase: "upload", loaded: 0, total: file.size });
@@ -203,6 +258,12 @@ function App() {
           <span className="eyebrow">MCCIA · monthly production workspace</span>
           <h1>Sampada Media Studio</h1>
           <p>Convert selectable-text magazine articles into reviewable metadata, multilingual narration, 1080p videos, SRT captions, and print-ready QR codes.</p>
+        </div>
+      </div>
+      <div className="header-right">
+        <div className={`status-pill ${serverStatus}`}>
+          <span className="status-dot"></span>
+          <span>{serverStatus === "online" ? "Backend online" : serverStatus === "waking" ? "Backend waking up…" : serverStatus === "checking" ? "Connecting…" : "Backend sleeping"}</span>
         </div>
       </div>
     </header>

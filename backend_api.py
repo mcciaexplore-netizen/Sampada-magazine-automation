@@ -6,8 +6,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from magazine_app import (
@@ -37,23 +38,22 @@ from main import (
 log = logging.getLogger("sampada")
 app = FastAPI(title="Sampada media studio API")
 
-DEFAULT_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-    "https://sampada-magazine-automation.vercel.app",
-]
-extra_origins = [item.strip() for item in os.environ.get("CORS_ORIGINS", "").split(",") if item.strip()]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEFAULT_ORIGINS + extra_origins,
-    allow_origin_regex=r"^https://sampada-magazine-automation[a-z0-9-]*\.vercel\.app$",
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    log.exception("Unhandled server error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
 
 
 @app.get("/")
@@ -183,7 +183,15 @@ async def analyze(
         manifest = extract_articles(pdf_path, issue_dir, config)
     except RuntimeError as error:
         raise HTTPException(422, str(error))
-    qr_pages = detect_qr_pdf_pages(pdf_path)
+    except Exception as error:
+        log.exception("PDF extraction failed: %s", error)
+        raise HTTPException(422, f"Failed to extract articles from PDF: {error}")
+
+    try:
+        qr_pages = detect_qr_pdf_pages(pdf_path)
+    except Exception as error:
+        log.exception("QR detection failed: %s", error)
+        qr_pages = []
     frame = select_articles_containing_qr(manifest, qr_pages)
     drive_paths = monthly_paths(drive_dir, year, month)
     state = {

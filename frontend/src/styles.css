@@ -93,8 +93,68 @@ header {
 }
 
 .header-left { display: flex; align-items: center; gap: 24px; }
+.header-right { display: flex; align-items: center; }
 .brand-logo { height: 52px; width: auto; object-fit: contain; }
 .brand-divider { width: 1px; height: 44px; background: var(--border); }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all var(--t);
+}
+
+.status-pill .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-pill.online {
+  color: var(--green-text);
+  border-color: var(--green-tint-border);
+  background: var(--green-tint);
+}
+.status-pill.online .status-dot {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+.status-pill.waking,
+.status-pill.checking {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(254, 243, 199, 0.6);
+}
+.status-pill.waking .status-dot,
+.status-pill.checking .status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.status-pill.offline {
+  color: var(--red);
+  border-color: var(--red-tint-border);
+  background: var(--red-tint);
+}
+.status-pill.offline .status-dot {
+  background: var(--red);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
 
 .eyebrow {
   display: block;
