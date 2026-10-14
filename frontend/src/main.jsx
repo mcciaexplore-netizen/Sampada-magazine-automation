@@ -42,11 +42,15 @@ async function api(path, options = {}) {
   try {
     const response = await fetch(url, options);
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || data.message || `Request failed (${response.status})`);
+    if (!response.ok) {
+      const msg = typeof data.detail === "string" ? data.detail : (data.detail?.[0]?.msg || data.message || `Server error (${response.status})`);
+      throw new Error(msg);
+    }
     return data;
   } catch (err) {
+    console.error("API error for", url, err);
     if (err.message === "Failed to fetch" || err.name === "TypeError") {
-      throw new Error("Cannot reach the Sampada backend. Start it (uvicorn backend_api:app) or, on Render, wait 30-45 seconds for it to wake up, then retry.");
+      throw new Error(`Cannot reach backend at ${url.startsWith("http") ? url : window.location.origin + url}: ${err.message}. If using Render, wait 30-45s for cold start; if local, ensure uvicorn is running.`);
     }
     throw err;
   }
@@ -191,18 +195,34 @@ function App() {
     if (selectedCount === 0) {
       throw new Error("Please select at least one article checkbox before running automation.");
     }
-    await withLiveStats(async () => {
-      const data = await api("/api/automate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ issue_key: issueKey, rows })
-      });
-      setStats(data.stats);
-      setScriptsReady(true);
-      setExcelFile(data.xlsx || "");
-      keepGoogleLinks(data);
-      setNotice({ type: "success", text: data.message });
+    await api("/api/automate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ issue_key: issueKey, rows })
     });
+    // The pipeline runs on the server; poll so sleeps/network blips don't lose the run.
+    let misses = 0;
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 3000));
+      let job;
+      try { job = await api(`/api/job/${issueKey}`); misses = 0; }
+      catch (error) {
+        if (++misses >= 40) throw new Error("Lost contact with the backend. It may have restarted - click Analyze edition again, then retry.");
+        continue;
+      }
+      if (job.stats) setStats(job.stats);
+      if (job.status === "error") throw new Error(job.error || "Automation failed");
+      if (job.status === "none") throw new Error("The server lost this run (it likely restarted). Analyze the edition again and retry.");
+      if (job.status === "done") {
+        const data = job.result;
+        setStats(data.stats);
+        setScriptsReady(true);
+        setExcelFile(data.xlsx || "");
+        keepGoogleLinks(data);
+        setNotice({ type: "success", text: data.message });
+        return;
+      }
+    }
   });
 
   const saveReview = () => run("Creating Excel workbook and narration scripts with 8-9 YouTube hashtags…", async () => {

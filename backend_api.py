@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -258,9 +260,7 @@ def get_links(issue_key: str) -> dict:
     return {"rows": frame_records(pd.read_csv(path, encoding="utf-8-sig"))}
 
 
-@app.post("/api/automate")
-def automate(payload: ReviewPayload) -> dict:
-    issue_dir, manifest, state, drive_paths = prepare_selection(payload)
+def run_automation(issue_dir: Path, manifest: Path, state: dict, drive_paths: dict[str, Path]) -> dict:
     config = load_config(CONFIG_PATH)
     metadata_csv = metadata_and_script(manifest, issue_dir, config)
     produce_media(manifest, issue_dir, config)
@@ -280,6 +280,60 @@ def automate(payload: ReviewPayload) -> dict:
         message += f" {warning}"
     result["message"] = message
     return result
+
+
+def write_job(issue_dir: Path, job: dict) -> None:
+    tmp = issue_dir / "job.json.tmp"
+    tmp.write_text(json.dumps(job), encoding="utf-8")
+    tmp.replace(issue_dir / "job.json")
+
+
+def read_job(issue_dir: Path) -> dict | None:
+    try:
+        return json.loads((issue_dir / "job.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+_job_lock = threading.Lock()
+_active_jobs: set[str] = set()  # in-process; empty after a restart, which exposes stale 'running' files
+
+
+def _automation_worker(issue_dir: Path, manifest: Path, state: dict, drive_paths: dict[str, Path]) -> None:
+    started = time.time()
+    key = issue_dir.name
+    try:
+        result = run_automation(issue_dir, manifest, state, drive_paths)
+        write_job(issue_dir, {"status": "done", "started": started, "result": result})
+    except Exception as error:
+        log.exception("Automation failed")
+        write_job(issue_dir, {"status": "error", "started": started, "error": str(error)})
+    finally:
+        _active_jobs.discard(key)
+
+
+@app.post("/api/automate")
+def automate(payload: ReviewPayload) -> dict:
+    """Start the full pipeline in the background; poll /api/job/{issue_key} for the result."""
+    issue_dir, manifest, state, drive_paths = prepare_selection(payload)
+    with _job_lock:
+        if issue_dir.name in _active_jobs:
+            return {"status": "running", "already_running": True}
+        _active_jobs.add(issue_dir.name)
+        write_job(issue_dir, {"status": "running", "started": time.time()})
+        threading.Thread(target=_automation_worker, args=(issue_dir, manifest, state, drive_paths), daemon=True).start()
+    return {"status": "running"}
+
+
+@app.get("/api/job/{issue_key}")
+def job_status(issue_key: str) -> dict:
+    issue_dir, _manifest, _state, _drive_paths = issue_context(issue_key)
+    job = read_job(issue_dir)
+    if job and job.get("status") == "running" and issue_dir.name not in _active_jobs:
+        job = {"status": "error", "error": "The server restarted during the run. Click 1-Click again to resume."}
+    if job is None:
+        return {"status": "none", "stats": status_summary(issue_dir)}
+    return {**job, "stats": status_summary(issue_dir)}
 
 
 @app.get("/api/google/status")
