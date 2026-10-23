@@ -19,7 +19,6 @@ dependencies = [
     "uvicorn>=0.20",
     "python-multipart>=0.0.9",
     "openpyxl>=3.1",
-    "opencv-python-headless>=5.0",
     "google-api-python-client>=2.100",
     "google-auth>=2.30",
     "google-auth-oauthlib>=1.2",
@@ -27,6 +26,12 @@ dependencies = [
     "upstash-redis>=1.1",
     "qstash>=2.0"
 ]
+# opencv-python-headless is deliberately NOT a project dependency: Vercel's Python
+# runtime builds the deployed function from this file (not requirements.txt), and
+# opencv alone pushed the bundle past the 500MB function size limit. It only backs
+# the image-based QR-code fallback (detect_qr_pdf_pages degrades gracefully without
+# it), so it lives in requirements-dev.txt for local/CLI use instead -- run
+# `pip install -r requirements-dev.txt` for local development, not `pip install -e .`.
 
 [tool.vercel]
 entrypoint = "backend_api:app"
