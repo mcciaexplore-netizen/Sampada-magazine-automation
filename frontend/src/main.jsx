@@ -52,7 +52,7 @@ async function api(path, options = {}) {
   } catch (err) {
     console.error("API error for", url, err);
     if (err.message === "Failed to fetch" || err.name === "TypeError") {
-      throw new Error(`Cannot reach backend at ${url.startsWith("http") ? url : window.location.origin + url}: ${err.message}. If using Render, wait 30-45s for cold start; if local, ensure uvicorn is running.`);
+      throw new Error(`Cannot reach backend at ${url.startsWith("http") ? url : window.location.origin + url}: ${err.message}. If this just deployed, wait a few seconds and retry; if running locally, make sure uvicorn is running.`);
     }
     throw err;
   }
@@ -66,14 +66,14 @@ function uploadWithProgress(path, body, onProgress) {
     xhr.open("POST", url);
     xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress({ phase: "upload", loaded: event.loaded, total: event.total }); };
     xhr.upload.onload = () => onProgress({ phase: "analyze" });
-    xhr.onerror = () => reject(new Error("Cannot reach the Sampada backend. On Render's free tier, the server sleeps when idle (~45s spin-up time). Please wait a moment and try again."));
+    xhr.onerror = () => reject(new Error("Cannot reach the Sampada backend. Please check your connection and try again."));
     xhr.onload = () => {
       let data = {};
       try { data = JSON.parse(xhr.responseText); } catch { /* non-JSON error page */ }
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(data);
       } else if (xhr.status === 502 || xhr.status === 503 || xhr.status === 504) {
-        reject(new Error(`Render backend returned ${xhr.status} (Bad Gateway / Cold Start). The server was likely still spinning up. Please wait 15 seconds and click 'Analyze edition' again.`));
+        reject(new Error(`Backend returned ${xhr.status} (Bad Gateway). Please wait a moment and click 'Analyze edition' again.`));
       } else {
         reject(new Error(data.detail || data.message || `Request failed (${xhr.status})`));
       }
@@ -83,7 +83,10 @@ function uploadWithProgress(path, body, onProgress) {
 }
 
 async function ensureBackendReady(onStatus) {
-  const maxAttempts = 12;
+  // A Vercel function's cold start is a couple of seconds at most (unlike Render's free
+  // tier, which this backend previously ran on with a ~45s spin-up); this retry window
+  // is just resilience against a transient network blip, not a real wake-up wait.
+  const maxAttempts = 5;
   for (let i = 1; i <= maxAttempts; i++) {
     try {
       const controller = new AbortController();
@@ -96,12 +99,12 @@ async function ensureBackendReady(onStatus) {
       clearTimeout(timeoutId);
       if (res.ok) return true;
     } catch {
-      // Backend is still waking up
+      // transient network error; retry
     }
     if (onStatus) {
-      onStatus(`Waking up Render backend (${i * 3}s / ~40s)… Render free tier sleeps when idle.`);
+      onStatus(`Connecting to backend… (attempt ${i}/${maxAttempts})`);
     }
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   return false;
 }
@@ -144,8 +147,8 @@ function App() {
       }
       attempts++;
       if (!stop) {
-        setServerStatus(attempts > 15 ? "offline" : "waking");
-        timer = setTimeout(check, 3000);
+        setServerStatus(attempts > 6 ? "offline" : "waking");
+        timer = setTimeout(check, 2000);
       }
     };
     check();
@@ -178,7 +181,7 @@ function App() {
     setBusy("Connecting to backend server…");
     const ready = await ensureBackendReady((msg) => setBusy(msg));
     if (!ready) {
-      throw new Error("Render backend is taking longer than 40s to wake up. Please wait 15 seconds and try again.");
+      throw new Error("Could not reach the backend. Please check your connection and try again.");
     }
     setServerStatus("online");
     setBusy("Analyzing magazine pages and detecting table of contents…");

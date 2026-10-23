@@ -10,12 +10,15 @@ real atomic store. Redis is shared across every serverless instance, so job stat
 survives a redeploy or a request landing on a different cold start, unlike the old
 in-memory set.
 
-Requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (auto-injected by Vercel's
-Upstash integration).
+Requires REST credentials for an Upstash Redis database. Vercel's "Upstash for Redis"
+Marketplace integration injects these as KV_REST_API_URL / KV_REST_API_TOKEN (the
+Vercel KV naming); a standalone Upstash integration instead uses
+UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN. Either pair works.
 """
 from __future__ import annotations
 
 import json
+import os
 import time
 
 from upstash_redis import Redis
@@ -26,7 +29,9 @@ _client: Redis | None = None
 def _redis() -> Redis:
     global _client
     if _client is None:
-        _client = Redis.from_env()
+        url = os.environ.get("UPSTASH_REDIS_REST_URL") or os.environ["KV_REST_API_URL"]
+        token = os.environ.get("UPSTASH_REDIS_REST_TOKEN") or os.environ["KV_REST_API_TOKEN"]
+        _client = Redis(url, token)
     return _client
 
 

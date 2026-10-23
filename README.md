@@ -26,11 +26,11 @@ This runs as a single Vercel project: the React app builds to a static site, and
 
 Serverless functions have no persistent disk and can't run background threads past the response, so generated files live in **Vercel Blob** and job/queue state lives in **Upstash Redis** + **Upstash QStash** instead of the local `work/` folder and in-process thread the CLI/local dev server uses. Required setup:
 
-1. Attach the **Vercel Blob**, **Upstash Redis**, and **Upstash QStash** integrations to the project from the Vercel Marketplace — these auto-inject `BLOB_READ_WRITE_TOKEN`, `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, and `QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`.
+1. Attach the **Vercel Blob**, **Upstash for Redis**, and **Upstash QStash/Workflow** integrations to the project from the Vercel Marketplace — these auto-inject `BLOB_READ_WRITE_TOKEN`; `KV_REST_API_URL`/`KV_REST_API_TOKEN` (the Upstash Marketplace integration uses the Vercel KV naming, not `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` — `job_state.py` accepts either); and `QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`.
 2. Set `APP_BASE_URL` to this deployment's public URL (used to target QStash callbacks at `/api/worker/article`).
 3. Set the Google service-account env vars above.
 4. In the Vercel project settings, make sure **Root Directory** is the repository root (not `frontend/`) — `vercel.json` here builds both the frontend and the API.
-5. The project needs **Vercel Pro** (for `maxDuration` beyond the Hobby default) and, if the Python function bundle exceeds 250MB, Fluid Compute's large-function support (`VERCEL_SUPPORT_LARGE_FUNCTIONS=1`).
+5. The Python function bundle exceeds the standard 250/500MB limit, so enable **Fluid Compute** (Project Settings → Functions) and set `VERCEL_SUPPORT_LARGE_FUNCTIONS=1` as a project environment variable — this works on the Hobby plan, Vercel Pro is not required for it.
 
 Without the QStash env vars set, `/api/automate` falls back to running each article's narration/video job inline in the same request — fine for local testing with `vercel dev`, but not recommended in production since it reintroduces the function duration limit the queue is meant to avoid.
 
