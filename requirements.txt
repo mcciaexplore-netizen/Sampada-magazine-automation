@@ -3,7 +3,6 @@ Pillow>=10
 qrcode[pil]>=8
 edge-tts>=7
 imageio-ffmpeg>=0.6
-opencv-python-headless>=5.0
 pandas>=2.2
 fastapi>=0.116
 uvicorn>=0.35
@@ -12,3 +11,11 @@ openpyxl>=3.1
 google-api-python-client>=2.100
 google-auth>=2.30
 google-auth-oauthlib>=1.2
+requests>=2.31
+upstash-redis>=1.1
+qstash>=2.0
+
+# opencv-python-headless is deliberately NOT here: it's one of the largest packages in the
+# dependency tree and only backs the image-based QR-code fallback (detect_qr_pdf_pages
+# degrades gracefully to "select articles manually" without it). It's kept in
+# requirements-dev.txt for local CLI use, where bundle size doesn't matter.

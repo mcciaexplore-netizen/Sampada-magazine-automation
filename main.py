@@ -721,7 +721,17 @@ def ffmpeg_executable() -> str:
     if found:
         return found
     import imageio_ffmpeg
-    return imageio_ffmpeg.get_ffmpeg_exe()
+    bundled = imageio_ffmpeg.get_ffmpeg_exe()
+    if os.environ.get("VERCEL") == "1":
+        # Vercel's deployment bundle doesn't reliably preserve the executable bit, the
+        # same gotcha as AWS Lambda -- copy to /tmp and re-apply it once per cold start.
+        import tempfile
+        runnable = Path(tempfile.gettempdir()) / "sampada-ffmpeg"
+        if not runnable.exists():
+            shutil.copyfile(bundled, runnable)
+            runnable.chmod(0o755)
+        return str(runnable)
+    return bundled
 
 
 def _render_video_row(row: dict, work_dir: Path, config: dict, cards: Path, videos: Path, ffmpeg: str, pdf_path: Path | None = None) -> Path:

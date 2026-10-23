@@ -1,0 +1,5 @@
+# Full local/CLI dependency set. Use this (not requirements.txt) for local development,
+# since it restores opencv-python-headless for the image-based QR-code detection fallback
+# that's dropped from the Vercel deployment to keep the serverless bundle small.
+-r requirements.txt
+opencv-python-headless>=5.0

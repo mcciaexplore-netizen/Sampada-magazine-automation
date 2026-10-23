@@ -34,7 +34,9 @@ function CountUp({ value }) {
 
 const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
+// Defaults to same-origin: the frontend and the FastAPI backend are one Vercel deployment,
+// served under the same domain with /api/* routed to the Python function (see vercel.json).
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
 async function api(path, options = {}) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
@@ -207,6 +209,7 @@ function App() {
       let job;
       try { job = await api(`/api/job/${issueKey}`); misses = 0; }
       catch (error) {
+        if (/Analyze this edition first/.test(error.message)) throw new Error("This run's files could not be found (the stored edition may have been cleared). Analyze the edition again, then retry.");
         if (++misses >= 40) throw new Error("Lost contact with the backend. It may have restarted - click Analyze edition again, then retry.");
         continue;
       }
@@ -312,12 +315,20 @@ function App() {
         <div className="progress-fill" style={{ width: progress.phase === "upload" ? `${Math.round(progress.loaded / progress.total * 100)}%` : "100%" }}/>
       </div>
     </div>}
-    {busy && <div className="busy"><LoaderCircle className="spin" size={19}/>{busy}{busy.includes("audio") && ` ${stats.audio} / ${stats.selected}`}{busy.includes("videos") && ` ${stats.videos} / ${stats.selected}`}</div>}
+    {busy && <div className="busy"><LoaderCircle className="spin" size={19}/>{busy}
+      {stats.selected > 0 && /audio|videos|automation/.test(busy) && <div className="busy-stages">
+        {[["Audio & captions", stats.audio], ["1080p videos", stats.videos]].map(([name, n]) => <div className="busy-stage" key={name}>
+          {name}<b>{n} / {stats.selected}</b>
+          <div className="progress-track"><div className="progress-fill" style={{ width: `${Math.min(100, Math.round(n / stats.selected * 100))}%` }}/></div>
+        </div>)}
+      </div>}
+      {/automation/.test(busy) && <div className="busy-hint">Runs on the server - you can keep this tab open; short network drops won't stop it.</div>}
+    </div>}
     {notice && <div className={`notice ${notice.type}`}>{notice.text}</div>}
 
     {issueKey && <>
       <section className="metrics">
-        {[['Selected', selectedCount, null], ['Audio', stats.audio, stats.selected], ['Videos', stats.videos, stats.selected], ['QR codes', stats.qr, stats.selected]].map(([label, value, total], idx) => <div className="metric" key={label} style={{ "--i": idx }}><strong><CountUp value={value}/>{total !== null && <small> / {total}</small>}</strong><span>{label}</span></div>)}
+        {[['Selected', selectedCount, null], ['Audio', stats.audio, stats.selected], ['Videos', stats.videos, stats.selected], ['QR codes', stats.qr, stats.selected]].map(([label, value, total], idx) => <div className={`metric${total > 0 && value >= total ? " done" : ""}`} key={label} style={{ "--i": idx }}><strong><CountUp value={value}/>{total !== null && <small> / {total}</small>}</strong><span>{label}</span>{total > 0 && <div className="metric-bar"><i style={{ width: `${Math.min(100, Math.round(value / total * 100))}%` }}/></div>}</div>)}
       </section>
 
       <section className="card review">

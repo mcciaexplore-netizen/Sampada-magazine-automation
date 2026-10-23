@@ -8,13 +8,31 @@
 
 ## Google Drive / Sheet setup (one time)
 
-1. Google Cloud Console: create a project, enable **Google Drive API** and **Google Sheets API**.
-2. Credentials > Create OAuth client ID > Desktop app. Download the JSON and save it as `google_credentials.json` in this folder.
-3. Restart the backend. The first upload opens a browser to sign in (token cached in `google_token.json`).
+For local development: Google Cloud Console > create a project > enable **Google Drive API** and **Google Sheets API** > Credentials > Create OAuth client ID > Desktop app. Download the JSON as `google_credentials.json` in this folder; the first upload opens a browser to sign in (token cached in `google_token.json`).
 
-Alternatives: `GOOGLE_SERVICE_ACCOUNT_JSON` (key path or JSON) with `GOOGLE_DRIVE_FOLDER_ID` for a shared folder; `GOOGLE_DRIVE_PUBLIC=1` to make links viewable by anyone with the link. Production CORS: set `CORS_ORIGINS` (comma separated). Deploy the frontend on Vercel (`VITE_API_BASE_URL` = backend URL) and the backend on Render/locally.
+For the Vercel deployment below, use a **service account** instead (there's no browser to sign in from inside a serverless function):
+
+1. Google Cloud Console > IAM & Admin > Service Accounts > create one, enable the Drive and Sheets APIs for the project, and create a JSON key for it.
+2. Service accounts have no storage of their own, so share a **Shared Drive** (or a folder inside one) with the service account's email address, and note that folder's ID.
+3. Set the `GOOGLE_SERVICE_ACCOUNT_JSON` env var to the key file's contents, and `GOOGLE_DRIVE_FOLDER_ID` to the shared folder ID.
+
+Optional: `GOOGLE_DRIVE_PUBLIC=1` makes uploaded files viewable by anyone with the link.
 
 Per-issue manual overrides (titles, video titles, category badges) live in `config.json` under `issue_overrides` keyed by `YYYY-MM`.
+
+## Deploying on Vercel
+
+This runs as a single Vercel project: the React app builds to a static site, and the FastAPI backend (`backend_api.py`, exposed at `api/index.py`) runs as a Python serverless function, both under one domain (`vercel.json` routes `/api/*` to the function and everything else to the frontend).
+
+Serverless functions have no persistent disk and can't run background threads past the response, so generated files live in **Vercel Blob** and job/queue state lives in **Upstash Redis** + **Upstash QStash** instead of the local `work/` folder and in-process thread the CLI/local dev server uses. Required setup:
+
+1. Attach the **Vercel Blob**, **Upstash Redis**, and **Upstash QStash** integrations to the project from the Vercel Marketplace — these auto-inject `BLOB_READ_WRITE_TOKEN`, `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, and `QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`.
+2. Set `APP_BASE_URL` to this deployment's public URL (used to target QStash callbacks at `/api/worker/article`).
+3. Set the Google service-account env vars above.
+4. In the Vercel project settings, make sure **Root Directory** is the repository root (not `frontend/`) — `vercel.json` here builds both the frontend and the API.
+5. The project needs **Vercel Pro** (for `maxDuration` beyond the Hobby default) and, if the Python function bundle exceeds 250MB, Fluid Compute's large-function support (`VERCEL_SUPPORT_LARGE_FUNCTIONS=1`).
+
+Without the QStash env vars set, `/api/automate` falls back to running each article's narration/video job inline in the same request — fine for local testing with `vercel dev`, but not recommended in production since it reintroduces the function duration limit the queue is meant to avoid.
 
 Known limit: Marathi pages in the PDF use a legacy font, so extracted Marathi text is garbled. Marathi video title cards are cropped from the page image and look correct, but edit Marathi titles/scripts by hand before narration.
 
